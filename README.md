@@ -5,15 +5,25 @@ Plataforma para **guardar, ver, editar y compartir archivos HTML** (reportes gen
 - Entras con un **único token** de acceso.
 - Eliges un **perfil** (solo para etiquetar quién subió cada archivo).
 - Subes un `.html` → queda en tu **biblioteca**.
-- Lo **ves** renderizado, editas su **texto** (estilo Gmail) o su **código**.
+- Lo **ves** renderizado, editas su **texto** (estilo Gmail) o su **código** (con números de línea y resaltado de sintaxis).
 - Cada archivo tiene un **link público** para compartir; quien lo recibe solo ve, sin token.
+- Interfaz con la identidad de **Reuse** y **tema claro/oscuro** (por defecto sigue el del sistema).
+
+> 📓 Mapa técnico detallado del codebase (arquitectura, ruteo, backend, seguridad, UI): **[DOCS.md](DOCS.md)**.
 
 ## Stack
 
 - **Cloudflare Workers** — sirve el frontend estático (`public/`) y una API JSON.
 - **D1** (SQLite) — metadatos: perfiles, documentos, `share_id`.
 - **R2** — contenido HTML de cada archivo (no va en D1 por el límite de 1 MB/fila).
-- Frontend en **JS vanilla** (módulos ES), sin framework ni build step.
+- Frontend en **JS vanilla** (módulos ES), sin framework ni build step. Tipografía **Poppins** y editor **CodeMirror 5** servidos *self-host* (sin CDNs).
+
+## Diseño y temas
+
+- Identidad de **Reuse**: Foundation Purple `#151930`, Solid Purple `#37417f`, Re-Blue `#4b75f7`, Rising Lilac `#afb9ff` y verde de acento `#c6ffad`; tipografía **Poppins**.
+- **Selector de tema** (Sistema / Claro / Oscuro) en la barra superior: la preferencia se guarda en `localStorage` y *Sistema* sigue `prefers-color-scheme`. Un script inline en cada `<head>` evita el parpadeo al cargar.
+- Los *design tokens* viven en `public/app.css` (`:root` para claro, `:root[data-theme="dark"]` para oscuro). El modo oscuro usa Foundation Purple como fondo (el look insignia de Reuse).
+- Los logos oficiales (`public/logo-*.png`) se intercambian según el tema; el favicon es el isotipo (`public/icon.png`).
 
 ## Seguridad
 
@@ -72,9 +82,14 @@ src/
 public/
   index.html / login.js     Entrada (token)
   library.html / library.js Biblioteca (subir, perfiles, lista)
-  viewer.html / viewer.js   Visor/editor del dueño (Vista / Texto / Código)
+  viewer.html / viewer.js   Visor/editor (Vista / Texto / Código con CodeMirror)
   shared.html / shared.js   Vista pública compartida (solo lectura)
-  app.css / common.js       Estilos y helpers compartidos
+  app.css                   Estilos + design tokens (tema claro/oscuro)
+  common.js / theme.js      Helpers compartidos / selector de tema
+  fonts/                    Poppins (self-host, subset latin)
+  vendor/codemirror/        CodeMirror 5 (self-host)
+  *.png                     Logos de Reuse + favicon
+DOCS.md                     Mapa técnico detallado del codebase
 ```
 
 ## API (resumen)

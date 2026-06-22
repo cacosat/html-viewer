@@ -244,6 +244,19 @@ button:focus-visible { outline-offset: 2px; }
 .vis-toggle.on { background: var(--primary); }
 .vis-toggle.on::after { transform: translateX(20px); }
 
+/* Modo presentación (pantalla completa + zoom) */
+.present-overlay { position: fixed; inset: 0; z-index: 200; background: #0b0e1a; display: flex; flex-direction: column; }
+.present-bar { display: flex; align-items: center; gap: .5rem; padding: .5rem .75rem; background: rgba(0,0,0,.45); color: #fff; flex: 0 0 auto; }
+.present-stage { flex: 1; min-height: 0; overflow: auto; display: flex; justify-content: center; align-items: flex-start; }
+.present-zoomwrap { flex: 0 0 auto; }
+.present-zoomwrap iframe { border: 0; background: #fff; transform-origin: top left; display: block; }
+.pbtn { background: rgba(255,255,255,.12); color: #fff; border: 1px solid rgba(255,255,255,.22); border-radius: 8px; padding: .4rem .7rem; cursor: pointer; font: inherit; font-weight: 500; line-height: 1; }
+.pbtn:hover { background: rgba(255,255,255,.22); }
+.present-zoom { min-width: 54px; text-align: center; font-variant-numeric: tabular-nums; font-size: .9rem; }
+.present-spacer { flex: 1; }
+.present-hint { font-size: .8rem; opacity: .7; }
+@media (max-width: 560px) { .present-hint { display: none; } }
+
 /* Estado vacío (página compartida) */
 .empty-state { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem; color: var(--muted); text-align: center; padding: 2rem; }
 .empty-state .btn { background: var(--primary); color: var(--primary-ink); padding: .55rem 1rem; border-radius: var(--radius-sm); font-weight: 500; }

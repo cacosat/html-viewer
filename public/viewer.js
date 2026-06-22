@@ -1,4 +1,4 @@
-import { api, toast, shareModal } from "/common.js";
+import { api, toast, shareModal, presentMode } from "/common.js";
 
 const id = location.pathname.split("/").filter(Boolean).pop();
 const viewStage = document.getElementById("viewStage");
@@ -147,6 +147,11 @@ saveBtn.addEventListener("click", async () => {
 document.getElementById("copy").addEventListener("click", () => {
   if (!doc) return;
   shareModal({ id: doc.id, share_id: doc.share_id, public: doc.public, title: doc.title });
+});
+
+document.getElementById("present").addEventListener("click", () => {
+  captureCurrent();
+  presentMode({ srcdoc: content });
 });
 
 window.addEventListener("beforeunload", (e) => { if (dirty) { e.preventDefault(); e.returnValue = ""; } });

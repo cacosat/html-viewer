@@ -157,3 +157,73 @@ export function shareModal(doc) {
     dialog.querySelector(".modal-close").addEventListener("click", close);
   });
 }
+
+// ---- Modo presentación (pantalla completa + zoom) ----
+export function presentMode(opts = {}) {
+  const sandbox = opts.sandbox || "allow-scripts allow-forms allow-popups allow-modals allow-downloads";
+  const overlay = document.createElement("div");
+  overlay.className = "present-overlay";
+  overlay.innerHTML =
+    `<div class="present-bar">
+      <button class="pbtn" data-z="out" aria-label="Alejar" title="Alejar (−)">−</button>
+      <span class="present-zoom">100%</span>
+      <button class="pbtn" data-z="in" aria-label="Acercar" title="Acercar (+)">+</button>
+      <button class="pbtn" data-z="reset" title="Ajustar (0)">Ajustar</button>
+      <div class="present-spacer"></div>
+      <span class="present-hint">+/− zoom · Esc salir</span>
+      <button class="pbtn present-exit" title="Salir (Esc)">Salir ✕</button>
+    </div>
+    <div class="present-stage"><div class="present-zoomwrap"><iframe title="Presentación" sandbox="${sandbox}"></iframe></div></div>`;
+  document.body.appendChild(overlay);
+
+  const stage = overlay.querySelector(".present-stage");
+  const wrap = overlay.querySelector(".present-zoomwrap");
+  const iframe = overlay.querySelector("iframe");
+  const label = overlay.querySelector(".present-zoom");
+  if (opts.srcdoc != null) iframe.srcdoc = opts.srcdoc;
+  else if (opts.src) iframe.src = opts.src;
+
+  let z = 1, baseW = 0, baseH = 0, closed = false;
+  function apply() {
+    iframe.style.transform = `scale(${z})`;
+    wrap.style.width = baseW * z + "px";
+    wrap.style.height = baseH * z + "px";
+    label.textContent = Math.round(z * 100) + "%";
+  }
+  function fit() {
+    baseW = stage.clientWidth;
+    baseH = stage.clientHeight;
+    iframe.style.width = baseW + "px";
+    iframe.style.height = baseH + "px";
+    apply();
+  }
+  function setZoom(nz) { z = Math.min(4, Math.max(0.25, Math.round(nz * 20) / 20)); apply(); }
+  function close() {
+    if (closed) return;
+    closed = true;
+    document.removeEventListener("keydown", onKey);
+    window.removeEventListener("resize", fit);
+    document.removeEventListener("fullscreenchange", onFs);
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    overlay.remove();
+  }
+  function onKey(e) {
+    if (e.key === "Escape") close();
+    else if (e.key === "+" || e.key === "=") setZoom(z + 0.1);
+    else if (e.key === "-" || e.key === "_") setZoom(z - 0.1);
+    else if (e.key === "0") { z = 1; fit(); }
+  }
+  function onFs() { if (!document.fullscreenElement) close(); }
+
+  overlay.querySelector('[data-z="in"]').addEventListener("click", () => setZoom(z + 0.1));
+  overlay.querySelector('[data-z="out"]').addEventListener("click", () => setZoom(z - 0.1));
+  overlay.querySelector('[data-z="reset"]').addEventListener("click", () => { z = 1; fit(); });
+  overlay.querySelector(".present-exit").addEventListener("click", close);
+  document.addEventListener("keydown", onKey);
+  window.addEventListener("resize", fit);
+
+  if (overlay.requestFullscreen) {
+    overlay.requestFullscreen().then(() => document.addEventListener("fullscreenchange", onFs)).catch(() => {});
+  }
+  fit();
+}

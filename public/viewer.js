@@ -129,7 +129,11 @@ saveBtn.addEventListener("click", async () => {
   saveBtn.textContent = "Guardando…";
   try {
     const res = await api(`/api/documents/${id}`, { method: "PUT", body: { content, title: titleEl.value } });
-    if (!res.ok) throw new Error(await res.text());
+    if (!res.ok) {
+      const txt = await res.text();
+      let msg = txt; try { msg = JSON.parse(txt).message || txt; } catch {}
+      throw new Error(msg);
+    }
     dirty = false;
     toast("Guardado");
   } catch (err) {

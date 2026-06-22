@@ -177,6 +177,14 @@ button:focus-visible { outline-offset: 2px; }
 #toast { position: fixed; bottom: 1.25rem; left: 50%; transform: translateX(-50%) translateY(1rem); background: var(--ink); color: var(--bg); padding: .6rem 1rem; border-radius: var(--radius-sm); opacity: 0; transition: opacity .2s, transform .2s; pointer-events: none; z-index: 60; font-size: .9rem; font-weight: 500; }
 #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
+/* Banner de aviso (almacenamiento) */
+.banner { border-radius: var(--radius-sm); padding: .7rem 1rem; font-size: .9rem; line-height: 1.45; border: 1px solid transparent; }
+.banner[hidden] { display: none; }
+.banner.danger { background: #fdecea; color: #8a1f14; border-color: #f3c0b8; }
+.banner.near { background: #fff7e6; color: #7a5200; border-color: #f3dca0; }
+:root[data-theme="dark"] .banner.danger { background: rgba(255,107,107,.12); color: #ffb4ac; border-color: rgba(255,107,107,.32); }
+:root[data-theme="dark"] .banner.near { background: rgba(245,200,120,.12); color: #ffd98a; border-color: rgba(245,200,120,.32); }
+
 @media (max-width: 560px) {
   .topbar { flex-wrap: wrap; }
   .tabs { order: 3; width: 100%; justify-content: center; }

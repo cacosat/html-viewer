@@ -3,6 +3,34 @@ import { api, fmtDate, fmtSize, escapeHtml, toast } from "/common.js";
 const profileSel = document.getElementById("profile");
 const profileList = document.getElementById("profile-list");
 const docsEl = document.getElementById("docs");
+const storageWarn = document.getElementById("storage-warn");
+const uploadForm = document.getElementById("upload");
+
+const gb = (n) => (n / (1024 ** 3)).toFixed(2);
+
+function setUploadEnabled(on) {
+  for (const el of uploadForm.elements) el.disabled = !on;
+}
+
+async function loadStorage() {
+  try {
+    const s = await (await api("/api/storage")).json();
+    if (s.over) {
+      storageWarn.className = "banner danger";
+      storageWarn.innerHTML = `<strong>Almacenamiento al límite (${gb(s.used)} GB / 7 GB).</strong> Se bloquearon las subidas para no exceder el plan gratuito de Cloudflare R2 (10 GB). Elimina archivos o amplía el plan de R2 para volver a subir.`;
+      storageWarn.hidden = false;
+      setUploadEnabled(false);
+    } else if (s.near) {
+      storageWarn.className = "banner near";
+      storageWarn.innerHTML = `Almacenamiento en ${gb(s.used)} GB de 7 GB (límite de seguridad). Al llegar a 7 GB se bloquearán las subidas para no exceder el plan de R2.`;
+      storageWarn.hidden = false;
+      setUploadEnabled(true);
+    } else {
+      storageWarn.hidden = true;
+      setUploadEnabled(true);
+    }
+  } catch { /* sin red o sin sesión: no molestar */ }
+}
 
 document.getElementById("logout").addEventListener("click", async () => {
   await fetch("/auth/logout", { method: "POST" });
@@ -52,9 +80,14 @@ document.getElementById("upload").addEventListener("submit", async (e) => {
   btn.textContent = "Subiendo…";
   try {
     const res = await api("/api/documents", { method: "POST", body: fd });
-    if (!res.ok) throw new Error(await res.text());
+    if (!res.ok) {
+      const txt = await res.text();
+      let msg = txt; try { msg = JSON.parse(txt).message || txt; } catch {}
+      throw new Error(msg);
+    }
     e.target.reset();
     await loadDocs();
+    await loadStorage();
     toast("Archivo subido");
   } catch (err) {
     alert("Error al subir: " + err.message);
@@ -101,9 +134,11 @@ docsEl.addEventListener("click", async (e) => {
     if (!confirm("¿Eliminar este archivo definitivamente?")) return;
     await api(`/api/documents/${del.dataset.del}`, { method: "DELETE" });
     await loadDocs();
+    await loadStorage();
     toast("Archivo eliminado");
   }
 });
 
 loadProfiles();
 loadDocs();
+loadStorage();

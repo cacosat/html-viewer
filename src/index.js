@@ -5,6 +5,10 @@ import { isAuthed, createSessionCookie, clearSessionCookie, verifyToken } from "
 
 const MAX_UPLOAD = 10 * 1024 * 1024; // 10 MB
 
+// Failsafe de almacenamiento: si el total guardado supera este umbral, se bloquean
+// nuevas subidas y crecimientos para no exceder el plan gratuito de R2 (10 GB).
+const STORAGE_LIMIT = 7 * 1024 * 1024 * 1024; // 7 GiB
+
 // CSP que aísla el HTML subido en un origen opaco (sin allow-same-origin),
 // pero deja correr sus scripts para preservar la interactividad del reporte.
 const SANDBOX_CSP = "sandbox allow-scripts allow-forms allow-popups allow-modals allow-downloads";
@@ -90,6 +94,8 @@ async function handleSharedMeta(env, path) {
 }
 
 async function handleApi(request, env, path) {
+  if (path === "/api/storage") return handleStorage(env);
+
   // --- Perfiles ---
   if (path === "/api/profiles") {
     if (request.method === "GET") {
@@ -141,6 +147,35 @@ async function handleApi(request, env, path) {
   return notFound();
 }
 
+async function getUsedBytes(env) {
+  const r = await env.DB.prepare("SELECT COALESCE(SUM(size), 0) AS total FROM documents").first();
+  return Number(r && r.total) || 0;
+}
+
+async function handleStorage(env) {
+  const used = await getUsedBytes(env);
+  return json({
+    used,
+    limit: STORAGE_LIMIT,
+    percent: Math.min(100, Math.round((used / STORAGE_LIMIT) * 100)),
+    near: used >= STORAGE_LIMIT * 0.8 && used < STORAGE_LIMIT,
+    over: used >= STORAGE_LIMIT,
+  });
+}
+
+function storageBlocked(used) {
+  return json(
+    {
+      error: "storage_limit",
+      used,
+      limit: STORAGE_LIMIT,
+      message:
+        "Almacenamiento al límite de seguridad (7 GB). Se bloquearon las subidas para no exceder el plan gratuito de Cloudflare R2 (10 GB). Elimina archivos para liberar espacio o amplía el plan de R2.",
+    },
+    { status: 507 },
+  );
+}
+
 async function uploadDocument(request, env) {
   const form = await request.formData().catch(() => null);
   if (!form) return badRequest("Esperaba multipart/form-data");
@@ -148,6 +183,8 @@ async function uploadDocument(request, env) {
   if (!file || typeof file === "string") return badRequest("Archivo requerido");
   const ab = await file.arrayBuffer();
   if (ab.byteLength > MAX_UPLOAD) return badRequest("Archivo demasiado grande (máx 10 MB)");
+  const used = await getUsedBytes(env);
+  if (used + ab.byteLength > STORAGE_LIMIT) return storageBlocked(used);
   const content = new TextDecoder().decode(ab);
 
   const rawTitle = (form.get("title") || file.name || "Documento").toString();
@@ -181,7 +218,7 @@ async function getDocument(env, id) {
 async function updateDocument(request, env, id) {
   const b = await request.json().catch(() => null);
   if (!b) return badRequest();
-  const doc = await env.DB.prepare("SELECT r2_key FROM documents WHERE id = ?").bind(id).first();
+  const doc = await env.DB.prepare("SELECT r2_key, size FROM documents WHERE id = ?").bind(id).first();
   if (!doc) return notFound();
 
   const sets = [];
@@ -189,6 +226,10 @@ async function updateDocument(request, env, id) {
   if (typeof b.content === "string") {
     const bytes = new TextEncoder().encode(b.content);
     if (bytes.byteLength > MAX_UPLOAD) return badRequest("Contenido demasiado grande (máx 10 MB)");
+    if (bytes.byteLength > (doc.size || 0)) {
+      const used = await getUsedBytes(env);
+      if (used - (doc.size || 0) + bytes.byteLength > STORAGE_LIMIT) return storageBlocked(used);
+    }
     await env.BUCKET.put(doc.r2_key, b.content, { httpMetadata: { contentType: "text/html; charset=utf-8" } });
     sets.push("size = ?");
     binds.push(bytes.byteLength);

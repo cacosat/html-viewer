@@ -1,0 +1,36 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "html-viewer",
+  "main": "src/index.js",
+  "compatibility_date": "2026-06-22",
+
+  // Frontend estático (carpeta public/). El Worker corre primero solo en las
+  // rutas dinámicas; el resto de los assets se sirven directo.
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "not_found_handling": "none",
+    "run_worker_first": ["/api/*", "/auth/*", "/raw/*", "/doc/*", "/s/*"]
+  },
+
+  // Metadatos (perfiles, documentos, share links). El contenido HTML NO va aquí
+  // (límite de 1MB por fila en D1) sino en R2.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "html-viewer-db",
+      "database_id": "REEMPLAZAR_CON_ID_REAL_AL_DESPLEGAR",
+      "migrations_dir": "migrations"
+    }
+  ],
+
+  // Contenido de los archivos HTML.
+  "r2_buckets": [
+    {
+      "binding": "BUCKET",
+      "bucket_name": "html-viewer-files"
+    }
+  ],
+
+  "observability": { "enabled": true }
+}

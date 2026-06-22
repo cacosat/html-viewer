@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>html-viewer · Entrar</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📄</text></svg>">
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body class="center">
+  <form id="login" class="card auth">
+    <h1>html-viewer</h1>
+    <p class="muted">Ingresa el token de acceso para continuar.</p>
+    <input type="password" id="token" placeholder="Token de acceso" autocomplete="current-password" required>
+    <button type="submit">Entrar</button>
+    <p id="err" class="error" hidden></p>
+  </form>
+  <script type="module" src="/login.js"></script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Documento compartido · html-viewer</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📄</text></svg>">
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body class="viewer-body">
+  <header class="topbar share">
+    <span id="title" class="brand">Documento</span>
+    <div class="spacer"></div>
+    <a id="download" class="ghost">Descargar HTML</a>
+  </header>
+  <main class="viewer-main">
+    <iframe id="frame" sandbox="allow-scripts allow-forms allow-popups allow-modals allow-downloads"></iframe>
+  </main>
+  <script type="module" src="/shared.js"></script>
+</body>
+</html>

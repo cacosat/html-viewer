@@ -17,35 +17,32 @@
     <span class="sub">Visor</span>
     <div class="spacer"></div>
     <span id="theme-mount"></span>
-    <button id="logout" class="ghost">Salir</button>
+    <div id="profile-menu" class="profile-menu"></div>
   </header>
 
   <main class="container">
     <div id="storage-warn" class="banner" hidden></div>
+
     <section class="card">
       <h2>Subir HTML</h2>
       <form id="upload" class="upload-form">
         <input type="file" id="file" accept=".html,.htm,text/html" required>
         <input type="text" id="title" placeholder="Título (opcional)">
-        <select id="profile"></select>
+        <select id="visibility" title="Visibilidad">
+          <option value="0">Privado</option>
+          <option value="1">Público</option>
+        </select>
         <button type="submit">Subir</button>
       </form>
-      <details class="profiles">
-        <summary>Gestionar perfiles</summary>
-        <div class="profiles-body">
-          <form id="add-profile" class="row">
-            <input type="text" id="profile-name" placeholder="Nuevo perfil (ej: Marketing)">
-            <button type="submit" class="ghost">Agregar</button>
-          </form>
-          <ul id="profile-list"></ul>
-        </div>
-      </details>
     </section>
 
     <section>
-      <h2>Mis archivos</h2>
+      <div class="tabs lib-tabs">
+        <button data-tab="mine" class="active">Mis archivos</button>
+        <button data-tab="public">Público</button>
+      </div>
       <div id="docs" class="docs"></div>
-      <p id="empty" class="muted" hidden>Aún no has subido archivos.</p>
+      <p id="empty" class="muted" hidden></p>
     </section>
   </main>
 

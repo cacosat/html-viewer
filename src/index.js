@@ -21,8 +21,8 @@ export default {
 
     try {
       // --- Rutas públicas (sin token) ---
-      if (path.startsWith("/raw/")) return handleRaw(env, url);
-      if (path.startsWith("/api/shared/")) return handleSharedMeta(env, path);
+      if (path.startsWith("/raw/")) return handleRaw(request, env, url);
+      if (path.startsWith("/api/shared/")) return handleSharedMeta(request, env, path);
       if (path.startsWith("/s/")) return serveAsset(env, request, "/shared.html");
 
       // --- Auth ---
@@ -65,11 +65,12 @@ async function handleLogin(request, env, secure) {
 }
 
 // Sirve el contenido HTML crudo (aislado) por share_id. ?download fuerza descarga.
-async function handleRaw(env, url) {
+async function handleRaw(request, env, url) {
   const shareId = decodeURIComponent(url.pathname.slice("/raw/".length));
   if (!shareId) return notFound();
-  const doc = await env.DB.prepare("SELECT title, r2_key FROM documents WHERE share_id = ?").bind(shareId).first();
+  const doc = await env.DB.prepare("SELECT title, r2_key, public FROM documents WHERE share_id = ?").bind(shareId).first();
   if (!doc) return notFound("Documento no encontrado");
+  if (!doc.public && !(await isAuthed(request, env))) return new Response("Documento privado", { status: 403 });
   const obj = await env.BUCKET.get(doc.r2_key);
   if (!obj) return notFound("Contenido no encontrado");
 
@@ -85,11 +86,12 @@ async function handleRaw(env, url) {
   return new Response(obj.body, { headers });
 }
 
-async function handleSharedMeta(env, path) {
+async function handleSharedMeta(request, env, path) {
   const shareId = decodeURIComponent(path.slice("/api/shared/".length));
-  const doc = await env.DB.prepare("SELECT title, updated_at, share_id FROM documents WHERE share_id = ?")
+  const doc = await env.DB.prepare("SELECT title, updated_at, share_id, public FROM documents WHERE share_id = ?")
     .bind(shareId).first();
   if (!doc) return notFound();
+  if (!doc.public && !(await isAuthed(request, env))) return json({ private: true }, { status: 403 });
   return json(doc);
 }
 
@@ -99,15 +101,17 @@ async function handleApi(request, env, path) {
   // --- Perfiles ---
   if (path === "/api/profiles") {
     if (request.method === "GET") {
-      const r = await env.DB.prepare("SELECT id, name FROM profiles ORDER BY name COLLATE NOCASE").all();
+      const r = await env.DB.prepare("SELECT id, name, email, area FROM profiles ORDER BY name COLLATE NOCASE").all();
       return json(r.results);
     }
     if (request.method === "POST") {
       const b = await request.json().catch(() => null);
       const name = (b && b.name ? String(b.name) : "").trim().slice(0, 80);
+      const email = (b && b.email ? String(b.email) : "").trim().slice(0, 120) || null;
+      const area = (b && b.area ? String(b.area) : "").trim().slice(0, 80) || null;
       if (!name) return badRequest("Nombre requerido");
-      const res = await env.DB.prepare("INSERT INTO profiles (name) VALUES (?)").bind(name).run();
-      return json({ id: res.meta.last_row_id, name }, { status: 201 });
+      const res = await env.DB.prepare("INSERT INTO profiles (name, email, area) VALUES (?, ?, ?)").bind(name, email, area).run();
+      return json({ id: res.meta.last_row_id, name, email, area }, { status: 201 });
     }
     return badRequest("Método no soportado");
   }
@@ -124,12 +128,24 @@ async function handleApi(request, env, path) {
   // --- Documentos ---
   if (path === "/api/documents") {
     if (request.method === "GET") {
+      const params = new URL(request.url).searchParams;
+      const scope = params.get("scope");
+      const profileId = params.get("profile_id");
+      let where = "";
+      const binds = [];
+      if (scope === "public") {
+        where = "WHERE d.public = 1";
+      } else if (profileId) {
+        where = "WHERE d.profile_id = ?";
+        binds.push(Number(profileId));
+      }
       const r = await env.DB.prepare(
-        `SELECT d.id, d.share_id, d.title, d.profile_id, p.name AS profile_name,
+        `SELECT d.id, d.share_id, d.title, d.public, d.profile_id, p.name AS profile_name,
                 d.size, d.created_at, d.updated_at
          FROM documents d LEFT JOIN profiles p ON p.id = d.profile_id
+         ${where}
          ORDER BY d.created_at DESC`,
-      ).all();
+      ).bind(...binds).all();
       return json(r.results);
     }
     if (request.method === "POST") return uploadDocument(request, env);
@@ -191,6 +207,7 @@ async function uploadDocument(request, env) {
   const title = rawTitle.replace(/\.html?$/i, "").trim().slice(0, 200) || "Documento";
   const profileIdRaw = form.get("profile_id");
   const profile_id = profileIdRaw ? Number(profileIdRaw) : null;
+  const isPublic = String(form.get("public")) === "1" ? 1 : 0;
 
   const id = newId();
   const share_id = newShareId();
@@ -198,10 +215,10 @@ async function uploadDocument(request, env) {
 
   await env.BUCKET.put(r2_key, content, { httpMetadata: { contentType: "text/html; charset=utf-8" } });
   await env.DB.prepare(
-    "INSERT INTO documents (id, share_id, title, profile_id, r2_key, size) VALUES (?, ?, ?, ?, ?, ?)",
-  ).bind(id, share_id, title, profile_id, r2_key, ab.byteLength).run();
+    "INSERT INTO documents (id, share_id, title, profile_id, r2_key, size, public) VALUES (?, ?, ?, ?, ?, ?, ?)",
+  ).bind(id, share_id, title, profile_id, r2_key, ab.byteLength, isPublic).run();
 
-  return json({ id, share_id, title, profile_id, size: ab.byteLength }, { status: 201 });
+  return json({ id, share_id, title, profile_id, size: ab.byteLength, public: isPublic }, { status: 201 });
 }
 
 async function getDocument(env, id) {
@@ -241,6 +258,10 @@ async function updateDocument(request, env, id) {
   if (b.profile_id !== undefined) {
     sets.push("profile_id = ?");
     binds.push(b.profile_id ? Number(b.profile_id) : null);
+  }
+  if (b.public !== undefined) {
+    sets.push("public = ?");
+    binds.push(b.public ? 1 : 0);
   }
   sets.push("updated_at = datetime('now')");
   binds.push(id);

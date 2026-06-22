@@ -1,4 +1,4 @@
-import { api, toast } from "/common.js";
+import { api, toast, shareModal } from "/common.js";
 
 const id = location.pathname.split("/").filter(Boolean).pop();
 const viewStage = document.getElementById("viewStage");
@@ -144,11 +144,9 @@ saveBtn.addEventListener("click", async () => {
   }
 });
 
-document.getElementById("copy").addEventListener("click", async () => {
+document.getElementById("copy").addEventListener("click", () => {
   if (!doc) return;
-  const url = `${location.origin}/s/${doc.share_id}`;
-  try { await navigator.clipboard.writeText(url); toast("Link copiado"); }
-  catch { prompt("Copia el link:", url); }
+  shareModal({ id: doc.id, share_id: doc.share_id, public: doc.public, title: doc.title });
 });
 
 window.addEventListener("beforeunload", (e) => { if (dirty) { e.preventDefault(); e.returnValue = ""; } });

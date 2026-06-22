@@ -3,8 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>html-viewer · Documento</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📄</text></svg>">
+  <title>Reuse · Documento</title>
+  <link rel="icon" href="/icon.png">
+  <script>(function(){try{var p=localStorage.getItem('hv-theme')||'system';var d=p==='dark'||(p!=='light'&&matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.dataset.theme=d?'dark':'light';}catch(e){}})();</script>
   <link rel="stylesheet" href="/app.css">
 </head>
 <body class="viewer-body">
@@ -18,17 +19,29 @@
       <button data-tab="code">Código</button>
     </div>
     <div class="spacer"></div>
+    <span id="theme-mount"></span>
     <button id="copy" class="ghost">Copiar link</button>
     <button id="save" disabled>Guardar</button>
   </header>
   <main class="viewer-main">
-    <!-- Vista interactiva: scripts del reporte corren, pero en origen opaco (sin allow-same-origin). -->
-    <iframe id="viewFrame" sandbox="allow-scripts allow-forms allow-popups allow-modals allow-downloads"></iframe>
-    <!-- Edición de texto: allow-same-origin para poder activar designMode; sin allow-scripts, los
-         scripts del reporte quedan inertes (no se ejecutan) pero se conservan al guardar. -->
-    <iframe id="editFrame" sandbox="allow-same-origin" hidden></iframe>
-    <textarea id="code" spellcheck="false" hidden></textarea>
+    <!-- Vista interactiva: la hoja del documento, delimitada sobre el fondo de la app. -->
+    <div class="stage" id="viewStage">
+      <iframe id="viewFrame" sandbox="allow-scripts allow-forms allow-popups allow-modals allow-downloads"></iframe>
+    </div>
+    <!-- Editar texto: allow-same-origin (designMode) SIN allow-scripts; scripts inertes pero preservados. -->
+    <div class="stage" id="editStage" hidden>
+      <iframe id="editFrame" sandbox="allow-same-origin"></iframe>
+    </div>
+    <!-- Código: CodeMirror (se monta de forma diferida sobre este textarea). -->
+    <div class="pane" id="codePane" hidden>
+      <textarea id="code" spellcheck="false"></textarea>
+    </div>
+    <div class="edit-hint" id="editHint" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+      <span>Modo edición — haz clic en el texto para modificarlo</span>
+    </div>
   </main>
+  <script type="module" src="/theme.js"></script>
   <script type="module" src="/viewer.js"></script>
 </body>
 </html>

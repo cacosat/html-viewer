@@ -1,6 +1,10 @@
 import { api, toast } from "/common.js";
 
 const id = location.pathname.split("/").filter(Boolean).pop();
+const viewStage = document.getElementById("viewStage");
+const editStage = document.getElementById("editStage");
+const codePane = document.getElementById("codePane");
+const editHint = document.getElementById("editHint");
 const viewFrame = document.getElementById("viewFrame");
 const editFrame = document.getElementById("editFrame");
 const codeEl = document.getElementById("code");
@@ -9,44 +13,90 @@ const saveBtn = document.getElementById("save");
 const tabButtons = [...document.querySelectorAll(".tabs button")];
 
 let doc = null;
-let content = ""; // fuente de verdad del HTML, siempre al día
+let content = "";   // fuente de verdad del HTML, siempre al día
 let dirty = false;
+let cm = null;      // instancia CodeMirror (carga diferida)
+let cmSettingValue = false; // ignora el evento change del setValue programático
 
-function markDirty() {
-  dirty = true;
-  saveBtn.disabled = false;
-}
+function markDirty() { dirty = true; saveBtn.disabled = false; }
 
-// Serializa el HTML editado desde el iframe de texto. Los <script> quedaron
-// inertes (sin allow-scripts) pero presentes en el DOM, así que se preservan.
+// Serializa el HTML del iframe de edición. Guarda contra vaciar `content`
+// (p. ej. si el iframe aún no terminó de cargar).
 function readEditFrame() {
-  const d = editFrame.contentDocument;
-  if (!d || !d.documentElement) return content;
-  const doctype = d.doctype ? `<!DOCTYPE ${d.doctype.name}>\n` : "";
-  return doctype + d.documentElement.outerHTML;
+  try {
+    const d = editFrame.contentDocument;
+    if (!d || !d.body || !d.body.innerHTML.trim()) return content;
+    const doctype = d.doctype ? `<!DOCTYPE ${d.doctype.name}>\n` : "";
+    return doctype + d.documentElement.outerHTML;
+  } catch {
+    return content;
+  }
 }
 
-// La superficie visible es la fuente de verdad: evita depender de estado que
-// se pueda desincronizar de lo que el usuario realmente ve.
+// La superficie visible es la fuente de verdad (no depende de estado externo).
 function visibleSurface() {
-  if (!codeEl.hidden) return "code";
-  if (!editFrame.hidden) return "text";
+  if (!codePane.hidden) return "code";
+  if (!editStage.hidden) return "text";
   return "view";
 }
 
-function syncContentFromView() {
+function captureCurrent() {
   const s = visibleSurface();
-  if (s === "code") content = codeEl.value;
-  else if (s === "text") content = readEditFrame();
-  // en "view" no se edita; content ya está al día
+  if (s === "text") content = readEditFrame();
+  else if (s === "code") content = cm ? cm.getValue() : codeEl.value;
 }
 
-function setTab(tab) {
-  syncContentFromView(); // captura ediciones de la superficie actual antes de cambiar
+// ---- CodeMirror (self-host, carga diferida) ----
+function loadScript(src) {
+  return new Promise((res, rej) => {
+    const s = document.createElement("script");
+    s.src = src; s.onload = res; s.onerror = rej;
+    document.head.appendChild(s);
+  });
+}
+
+let cmAssets = null;
+function loadCMAssets() {
+  if (cmAssets) return cmAssets;
+  const link = document.createElement("link");
+  link.rel = "stylesheet";
+  link.href = "/vendor/codemirror/codemirror.min.css";
+  document.head.appendChild(link);
+  cmAssets = (async () => {
+    await loadScript("/vendor/codemirror/codemirror.min.js");
+    await loadScript("/vendor/codemirror/xml.min.js");
+    await loadScript("/vendor/codemirror/javascript.min.js");
+    await loadScript("/vendor/codemirror/css.min.js");
+    await loadScript("/vendor/codemirror/htmlmixed.min.js");
+  })();
+  return cmAssets;
+}
+
+async function ensureCM() {
+  if (cm) return;
+  try {
+    await loadCMAssets();
+    if (!window.CodeMirror) return;
+    cm = window.CodeMirror.fromTextArea(codeEl, {
+      mode: "htmlmixed",
+      lineNumbers: true,
+      lineWrapping: true,
+      tabSize: 2,
+      theme: "default",
+    });
+    cm.on("change", () => { if (cmSettingValue) return; content = cm.getValue(); markDirty(); });
+  } catch {
+    cm = null; // fallback: textarea plano
+  }
+}
+
+async function setTab(tab) {
+  captureCurrent(); // captura ediciones de la superficie actual antes de cambiar
   for (const b of tabButtons) b.classList.toggle("active", b.dataset.tab === tab);
-  viewFrame.hidden = tab !== "view";
-  editFrame.hidden = tab !== "text";
-  codeEl.hidden = tab !== "code";
+  viewStage.hidden = tab !== "view";
+  editStage.hidden = tab !== "text";
+  codePane.hidden = tab !== "code";
+  editHint.hidden = tab !== "text";
 
   if (tab === "view") {
     viewFrame.srcdoc = content;
@@ -59,8 +109,10 @@ function setTab(tab) {
       } catch (_) { /* algún navegador podría bloquearlo */ }
     };
     editFrame.srcdoc = content;
-  } else {
-    codeEl.value = content;
+  } else if (tab === "code") {
+    await ensureCM();
+    if (cm) { cmSettingValue = true; cm.setValue(content); cmSettingValue = false; setTimeout(() => cm.refresh(), 0); }
+    else { codeEl.value = content; }
   }
 }
 
@@ -69,11 +121,10 @@ document.querySelector(".tabs").addEventListener("click", (e) => {
   if (b) setTab(b.dataset.tab);
 });
 
-codeEl.addEventListener("input", () => { content = codeEl.value; markDirty(); });
 titleEl.addEventListener("input", markDirty);
 
 saveBtn.addEventListener("click", async () => {
-  syncContentFromView();
+  captureCurrent();
   saveBtn.disabled = true;
   saveBtn.textContent = "Guardando…";
   try {
@@ -104,7 +155,7 @@ async function load() {
   doc = await res.json();
   content = doc.content || "";
   titleEl.value = doc.title || "";
-  document.title = (doc.title || "Documento") + " · html-viewer";
+  document.title = (doc.title || "Documento") + " · Reuse";
   setTab("view");
 }
 

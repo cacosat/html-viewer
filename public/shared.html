@@ -3,19 +3,28 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Documento compartido · html-viewer</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📄</text></svg>">
+  <title>Documento compartido · Reuse</title>
+  <link rel="icon" href="/icon.png">
+  <script>(function(){try{var p=localStorage.getItem('hv-theme')||'system';var d=p==='dark'||(p!=='light'&&matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.dataset.theme=d?'dark':'light';}catch(e){}})();</script>
   <link rel="stylesheet" href="/app.css">
 </head>
 <body class="viewer-body">
   <header class="topbar share">
-    <span id="title" class="brand">Documento</span>
+    <a href="/" class="brand-link" aria-label="Ir al inicio de Reuse">
+      <img class="brandmark logo-light" src="/logo-purple.png" alt="Reuse">
+      <img class="brandmark logo-dark" src="/logo-white.png" alt="Reuse">
+    </a>
+    <span id="title" style="font-weight:600">Documento</span>
     <div class="spacer"></div>
+    <span id="theme-mount"></span>
     <a id="download" class="ghost">Descargar HTML</a>
   </header>
   <main class="viewer-main">
-    <iframe id="frame" sandbox="allow-scripts allow-forms allow-popups allow-modals allow-downloads"></iframe>
+    <div class="stage">
+      <iframe id="frame" sandbox="allow-scripts allow-forms allow-popups allow-modals allow-downloads"></iframe>
+    </div>
   </main>
+  <script type="module" src="/theme.js"></script>
   <script type="module" src="/shared.js"></script>
 </body>
 </html>

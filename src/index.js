@@ -152,6 +152,33 @@ async function handleApi(request, env, path) {
     return badRequest("Método no soportado");
   }
 
+  // --- Comentarios de un documento ---
+  const commentsMatch = path.match(/^\/api\/documents\/([^/]+)\/comments$/);
+  if (commentsMatch) {
+    const docId = decodeURIComponent(commentsMatch[1]);
+    if (request.method === "GET") {
+      const r = await env.DB.prepare(
+        "SELECT id, author, body, created_at FROM comments WHERE document_id = ? ORDER BY created_at",
+      ).bind(docId).all();
+      return json(r.results);
+    }
+    if (request.method === "POST") {
+      const b = await request.json().catch(() => null);
+      const body = (b && b.body ? String(b.body) : "").trim().slice(0, 2000);
+      const author = (b && b.author ? String(b.author) : "").trim().slice(0, 80) || null;
+      if (!body) return badRequest("Comentario vacío");
+      const res = await env.DB.prepare("INSERT INTO comments (document_id, author, body) VALUES (?, ?, ?)")
+        .bind(docId, author, body).run();
+      return json({ id: res.meta.last_row_id, author, body }, { status: 201 });
+    }
+    return badRequest("Método no soportado");
+  }
+  const commentDel = path.match(/^\/api\/comments\/(\d+)$/);
+  if (commentDel && request.method === "DELETE") {
+    await env.DB.prepare("DELETE FROM comments WHERE id = ?").bind(Number(commentDel[1])).run();
+    return new Response(null, { status: 204 });
+  }
+
   const docMatch = path.match(/^\/api\/documents\/([^/]+)$/);
   if (docMatch) {
     const id = decodeURIComponent(docMatch[1]);
@@ -273,6 +300,9 @@ async function deleteDocument(env, id) {
   const doc = await env.DB.prepare("SELECT r2_key FROM documents WHERE id = ?").bind(id).first();
   if (!doc) return notFound();
   await env.BUCKET.delete(doc.r2_key);
-  await env.DB.prepare("DELETE FROM documents WHERE id = ?").bind(id).run();
+  await env.DB.batch([
+    env.DB.prepare("DELETE FROM comments WHERE document_id = ?").bind(id),
+    env.DB.prepare("DELETE FROM documents WHERE id = ?").bind(id),
+  ]);
   return new Response(null, { status: 204 });
 }

@@ -130,7 +130,7 @@ button:focus-visible { outline-offset: 2px; }
 .stage, .pane { position: absolute; inset: 0; }
 .stage[hidden], .pane[hidden] { display: none; }
 .stage { overflow: auto; padding: 1.25rem; display: flex; justify-content: center; }
-.stage iframe { width: 100%; max-width: 1000px; height: 100%; background: #fff; border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
+.stage iframe { width: 100%; max-width: 1300px; height: 100%; background: #fff; border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
 .pane { background: var(--surface); }
 
 /* Modo "Editar texto": anillo de acento + hint flotante */
@@ -261,3 +261,27 @@ button:focus-visible { outline-offset: 2px; }
 .empty-state { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem; color: var(--muted); text-align: center; padding: 2rem; }
 .empty-state .btn { background: var(--primary); color: var(--primary-ink); padding: .55rem 1rem; border-radius: var(--radius-sm); font-weight: 500; }
 .empty-state .btn:hover { text-decoration: none; }
+
+/* Comentarios (visor) — barra lateral a la derecha del documento */
+.viewer-main.has-comments { display: flex; }
+.doc-area { position: relative; flex: 1; min-width: 0; background: var(--bg); }
+.comments { flex: 0 0 320px; width: 320px; border-left: 1px solid var(--line); background: var(--surface); display: flex; flex-direction: column; min-height: 0; }
+.comments-head { padding: .8rem 1rem; font-weight: 600; border-bottom: 1px solid var(--line); }
+.comments-list { flex: 1; overflow: auto; padding: .85rem 1rem; display: flex; flex-direction: column; gap: .85rem; }
+.comments-empty { margin: auto 0; text-align: center; }
+.comment-head { display: flex; justify-content: space-between; align-items: baseline; gap: .5rem; }
+.comment-author { font-weight: 600; font-size: .85rem; }
+.comment-date { font-size: .72rem; color: var(--muted); white-space: nowrap; }
+.comment-body { font-size: .88rem; line-height: 1.4; white-space: pre-wrap; word-break: break-word; margin-top: .15rem; }
+.comments-form { border-top: 1px solid var(--line); padding: .75rem; display: flex; flex-direction: column; gap: .5rem; }
+.comments-form textarea { resize: vertical; min-height: 46px; font-family: inherit; }
+
+@media (max-width: 860px) {
+  .viewer-main.has-comments { flex-direction: column; }
+  .comments { flex: 0 0 auto; width: auto; max-height: 42%; border-left: 0; border-top: 1px solid var(--line); }
+}
+
+.viewer-main.comments-hidden .comments { display: none; }
+.ghost.icon-only { padding: .5rem; }
+.ghost.icon-only svg { width: 18px; height: 18px; display: block; }
+#toggle-comments.active { color: var(--primary); border-color: var(--primary); }

@@ -20,27 +20,38 @@
     </div>
     <div class="spacer"></div>
     <span id="theme-mount"></span>
+    <button id="toggle-comments" class="ghost icon-only" title="Mostrar/ocultar comentarios" aria-label="Comentarios"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></button>
     <button id="present" class="ghost">Presentar</button>
     <button id="copy" class="ghost">Compartir</button>
     <button id="save" disabled>Guardar</button>
   </header>
-  <main class="viewer-main">
-    <!-- Vista interactiva: la hoja del documento, delimitada sobre el fondo de la app. -->
-    <div class="stage" id="viewStage">
-      <iframe id="viewFrame" sandbox="allow-scripts allow-forms allow-popups allow-modals allow-downloads"></iframe>
+  <main class="viewer-main has-comments">
+    <div class="doc-area">
+      <!-- Vista interactiva -->
+      <div class="stage" id="viewStage">
+        <iframe id="viewFrame" sandbox="allow-scripts allow-forms allow-popups allow-modals allow-downloads"></iframe>
+      </div>
+      <!-- Editar texto (designMode, scripts inertes) -->
+      <div class="stage" id="editStage" hidden>
+        <iframe id="editFrame" sandbox="allow-same-origin"></iframe>
+      </div>
+      <!-- Código (CodeMirror) -->
+      <div class="pane" id="codePane" hidden>
+        <textarea id="code" spellcheck="false"></textarea>
+      </div>
+      <div class="edit-hint" id="editHint" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+        <span>Modo edición — haz clic en el texto para modificarlo</span>
+      </div>
     </div>
-    <!-- Editar texto: allow-same-origin (designMode) SIN allow-scripts; scripts inertes pero preservados. -->
-    <div class="stage" id="editStage" hidden>
-      <iframe id="editFrame" sandbox="allow-same-origin"></iframe>
-    </div>
-    <!-- Código: CodeMirror (se monta de forma diferida sobre este textarea). -->
-    <div class="pane" id="codePane" hidden>
-      <textarea id="code" spellcheck="false"></textarea>
-    </div>
-    <div class="edit-hint" id="editHint" hidden>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-      <span>Modo edición — haz clic en el texto para modificarlo</span>
-    </div>
+    <aside class="comments" id="comments">
+      <div class="comments-head">Comentarios</div>
+      <div class="comments-list" id="comments-list"></div>
+      <form class="comments-form" id="comments-form">
+        <textarea id="comment-body" placeholder="Escribe un comentario…" rows="2"></textarea>
+        <button type="submit">Comentar</button>
+      </form>
+    </aside>
   </main>
   <script type="module" src="/theme.js"></script>
   <script type="module" src="/viewer.js"></script>

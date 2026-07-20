@@ -26,6 +26,7 @@ Plataforma para **guardar, ver, editar, presentar y compartir archivos HTML** (r
 - **Compartir estilo Drive**: modal con el link, botón copiar y toggle **Público/Privado**.
 - **Editor**: pestañas *Vista* (interactiva), *Editar texto* (`designMode`) y *Código* (CodeMirror); el documento se muestra como una hoja delimitada.
 - **Modo presentación**: pantalla completa con zoom (+/−), atajos de teclado (`+` `-` `0` `Esc`).
+- **Comentarios** por documento en el visor: barra lateral (ocultable con un toggle en la barra superior) que en pantallas angostas se apila debajo del documento.
 - **Failsafe de almacenamiento**: a 7 GB de uso en R2 se bloquean las subidas con un aviso, para no exceder el plan gratuito (10 GB).
 
 ## Diseño y temas
@@ -83,7 +84,7 @@ npm run deploy
 
 ```
 wrangler.jsonc          Config del Worker (assets, D1, R2)
-migrations/             Esquema SQL de D1 (0001 base, 0002 perfiles+visibilidad)
+migrations/             Esquema SQL de D1 (0001 base, 0002 perfiles+visibilidad, 0003 comentarios)
 src/
   index.js              Router: API + contenido + assets + failsafe de storage
   auth.js               Sesión por cookie firmada (HMAC)
@@ -114,6 +115,8 @@ DOCS.md                     Mapa técnico detallado del codebase
 | GET | `/api/documents?scope=public` · `?profile_id=N` | sí | Lista por tab |
 | POST | `/api/documents` | sí | Sube documento (con visibilidad) |
 | GET/PUT/DELETE | `/api/documents/:id` | sí | Lee (con contenido) / actualiza (incl. `public`) / elimina |
+| GET/POST | `/api/documents/:id/comments` | sí | Lista / agrega comentarios |
+| DELETE | `/api/comments/:id` | sí | Elimina un comentario |
 | GET | `/api/shared/:shareId` | — (privado: 403) | Metadatos públicos |
 | GET | `/raw/:shareId` | público o sesión si privado | Contenido HTML aislado (`?download`) |
 | GET | `/s/:shareId` · `/doc/:id` | — / shell | Páginas de visualización |

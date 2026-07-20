@@ -58,6 +58,7 @@ package.json              Scripts (dev, deploy, db:migrate:*) y devDep wrangler
 migrations/
   0001_init.sql           Esquema base: profiles, documents + índices
   0002_profiles_public.sql  profiles +email/area; documents +public; índices
+  0003_comments.sql         Tabla comments (comentarios por documento)
 src/
   index.js                Router: API + contenido + sirve assets + failsafe de storage
   auth.js                 Sesión por cookie firmada (HMAC) + verificación de token
@@ -102,6 +103,17 @@ public/
 
 **Índices:** `idx_documents_created`, `idx_documents_share`, `idx_documents_public`, `idx_documents_profile`.
 **Regla:** el contenido HTML nunca va en D1 (límite 1 MB/fila); siempre en R2.
+
+### Tabla `comments`
+| Columna | Tipo | Notas |
+|---|---|---|
+| `id` | INTEGER PK AUTOINCREMENT | |
+| `document_id` | TEXT NOT NULL | FK → `documents(id)` `ON DELETE CASCADE` (borrado en código) |
+| `author` | TEXT | Nombre del perfil que comentó (snapshot) |
+| `body` | TEXT NOT NULL | |
+| `created_at` | TEXT | Default `datetime('now')` |
+
+Índice: `idx_comments_doc (document_id, created_at)` — migración 0003.
 
 ---
 
@@ -156,10 +168,11 @@ Constantes: `MAX_UPLOAD = 10 MB`, `STORAGE_LIMIT = 7 GiB`, `SANDBOX_CSP`.
   - `/api/profiles`: GET (`id,name,email,area`), POST (`{name,email,area}`); `DELETE /api/profiles/:id` (batch: null en docs + borrar perfil).
   - `/api/documents`: GET con filtros `?scope=public` (públicos) o `?profile_id=N` (de un perfil); POST → `uploadDocument`.
   - `/api/documents/:id`: GET (con `content`), PUT, DELETE.
+  - `/api/documents/:id/comments`: GET (lista) / POST (`{author, body}`); `DELETE /api/comments/:id`.
 - `uploadDocument` → `multipart/form-data` (`file`, `title?`, `profile_id?`, `public`), valida ≤10 MB y el failsafe de storage, guarda en R2 e inserta.
 - `getDocument` → fila (`SELECT d.*`, incluye `public`) + `profile_name` + `content` de R2.
 - `updateDocument` → update parcial: `content` (reescribe R2 + chequeo de crecimiento vs failsafe), `title`, `profile_id`, `public`; siempre `updated_at`.
-- `deleteDocument` → borra R2 + fila.
+- `deleteDocument` → borra R2 + comentarios del doc + fila (batch).
 
 Todas las consultas usan **prepared statements con `bind`** (sin inyección SQL).
 
@@ -211,7 +224,7 @@ Claro en `:root`, oscuro en `:root[data-theme="dark"]` (oscuro = Foundation Purp
 ### 11.5 Páginas
 - **`index.html` + `login.js`** — Login en **2 pasos**: (1) token → `POST /auth/login`; (2) dropdown de perfiles + "Crear perfil" (modal). Al elegir, guarda el perfil en `localStorage` y va a `/library`. Si ya hay sesión y perfil, salta directo.
 - **`library.html` + `library.js`** — Topbar con logo, selector de tema y **menú de perfil** (avatar + nombre; switch de perfil / crear / salir). Sección de subida (archivo, título, **visibilidad pública/privada**) con el banner del failsafe. **Tabs**: *Mis archivos* (`?profile_id=`) y *Público* (`?scope=public`). Cada doc es una **card** con **thumbnail** (iframe a `/raw` escalado, lazy con `IntersectionObserver`), badges (perfil, Público/Privado) y **acciones solo-ícono** (compartir → `shareModal`, descargar, eliminar). El título/thumbnail abren `/doc/:id`.
-- **`viewer.html` + `viewer.js`** — Topbar: volver, título editable, **3 pestañas**, selector de tema, **Presentar**, **Compartir** (`shareModal`), Guardar. Superficies en **hoja delimitada** (`.stage`): Vista (`#viewFrame`, interactiva), Editar texto (`#editFrame`, `designMode`, con anillo + hint), Código (`#codePane` con CodeMirror, carga diferida). `content` es la fuente de verdad (se sincroniza desde la superficie visible). Guarda con `PUT`; `beforeunload` avisa cambios sin guardar.
+- **`viewer.html` + `viewer.js`** — Topbar: volver, título editable, **3 pestañas**, selector de tema, **Presentar**, **Compartir** (`shareModal`), Guardar. Superficies en **hoja delimitada** (`.stage`): Vista (`#viewFrame`, interactiva), Editar texto (`#editFrame`, `designMode`, con anillo + hint), Código (`#codePane` con CodeMirror, carga diferida). `content` es la fuente de verdad (se sincroniza desde la superficie visible). Guarda con `PUT`; `beforeunload` avisa cambios sin guardar. La hoja usa `max-width: 1300px` (márgenes laterales chicos). A la derecha hay una **barra de comentarios** (`.comments`) con la lista + caja para agregar (autor = perfil activo); se **oculta/muestra** con un toggle en la topbar (preferencia en `localStorage` `hv-comments`) y en pantallas angostas se apila debajo del documento.
 - **`shared.html` + `shared.js`** — Vista pública: logo (enlaza a `/`), título, tema, **Presentar**, Descargar. Consulta `/api/shared/:shareId`; si es **privado** (403) muestra "Documento privado"; si existe, carga el iframe a `/raw` en una hoja delimitada.
 
 ### 11.6 Modo presentación (`presentMode`)
@@ -236,6 +249,8 @@ Listas con template strings + `escapeHtml` vía `innerHTML`; handlers por **dele
 | GET | `/api/documents?profile_id=N` | sí | Documentos de un perfil |
 | POST | `/api/documents` | sí | multipart `file,title?,profile_id?,public` |
 | GET / PUT / DELETE | `/api/documents/:id` | sí | Lee (con `content`) / actualiza (`content?,title?,profile_id?,public?`) / elimina |
+| GET / POST | `/api/documents/:id/comments` | sí | Lista / agrega comentario (`{author, body}`) |
+| DELETE | `/api/comments/:id` | sí | Elimina un comentario |
 | GET | `/api/shared/:shareId` | — (privado: 403) | Metadatos públicos |
 | GET | `/raw/:shareId` | público o sesión si privado | Contenido aislado (`?download`) |
 | GET | `/s/:shareId` · `/doc/:id` | — / shell | Páginas (datos según auth) |

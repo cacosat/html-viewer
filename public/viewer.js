@@ -1,4 +1,4 @@
-import { api, toast, shareModal, presentMode } from "/common.js";
+import { api, toast, shareModal, presentMode, getProfile, escapeHtml, fmtDate } from "/common.js";
 
 const id = location.pathname.split("/").filter(Boolean).pop();
 const viewStage = document.getElementById("viewStage");
@@ -154,6 +154,57 @@ document.getElementById("present").addEventListener("click", () => {
   presentMode({ srcdoc: content });
 });
 
+// ---- Comentarios ----
+const profile = getProfile();
+const commentsList = document.getElementById("comments-list");
+const commentsForm = document.getElementById("comments-form");
+
+async function loadComments() {
+  try {
+    const cs = await (await api(`/api/documents/${id}/comments`)).json();
+    commentsList.innerHTML = cs.length
+      ? cs.map((c) =>
+          `<div class="comment"><div class="comment-head"><span class="comment-author">${escapeHtml(c.author || "—")}</span><span class="comment-date">${fmtDate(c.created_at)}</span></div><div class="comment-body">${escapeHtml(c.body)}</div></div>`,
+        ).join("")
+      : `<p class="muted comments-empty">Sin comentarios aún.</p>`;
+    commentsList.scrollTop = commentsList.scrollHeight;
+  } catch { /* noop */ }
+}
+
+commentsForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const ta = document.getElementById("comment-body");
+  const body = ta.value.trim();
+  if (!body) return;
+  const btn = commentsForm.querySelector("button");
+  btn.disabled = true;
+  try {
+    const res = await api(`/api/documents/${id}/comments`, { method: "POST", body: { author: (profile && profile.name) || "Anónimo", body } });
+    if (!res.ok) throw new Error();
+    ta.value = "";
+    await loadComments();
+  } catch {
+    toast("No se pudo comentar");
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// Toggle de la barra de comentarios (preferencia persistida)
+const toggleCommentsBtn = document.getElementById("toggle-comments");
+function applyCommentsState() {
+  const open = localStorage.getItem("hv-comments") !== "closed";
+  document.querySelector(".viewer-main").classList.toggle("comments-hidden", !open);
+  toggleCommentsBtn.classList.toggle("active", open);
+  toggleCommentsBtn.setAttribute("aria-pressed", String(open));
+}
+toggleCommentsBtn.addEventListener("click", () => {
+  const open = localStorage.getItem("hv-comments") !== "closed";
+  localStorage.setItem("hv-comments", open ? "closed" : "open");
+  applyCommentsState();
+});
+applyCommentsState();
+
 window.addEventListener("beforeunload", (e) => { if (dirty) { e.preventDefault(); e.returnValue = ""; } });
 
 async function load() {
@@ -164,6 +215,7 @@ async function load() {
   titleEl.value = doc.title || "";
   document.title = (doc.title || "Documento") + " · Reuse";
   setTab("view");
+  loadComments();
 }
 
 load();

@@ -133,11 +133,8 @@ button:focus-visible { outline-offset: 2px; }
 .stage iframe { width: 100%; max-width: 1300px; height: 100%; background: #fff; border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
 .pane { background: var(--surface); }
 
-/* Modo "Editar texto": anillo de acento + hint flotante */
+/* Modo "Editar texto": anillo de acento (la barra de formato indica el modo) */
 #editStage iframe { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary), var(--shadow); }
-.edit-hint { position: absolute; top: .9rem; left: 50%; transform: translateX(-50%); z-index: 6; display: inline-flex; align-items: center; gap: .45rem; background: var(--primary); color: var(--primary-ink); font-size: .8rem; font-weight: 500; padding: .35rem .8rem; border-radius: 999px; box-shadow: var(--shadow); pointer-events: none; }
-.edit-hint[hidden] { display: none; }
-.edit-hint svg { width: 14px; height: 14px; }
 
 .title-input { border: 1px solid transparent; background: transparent; font-weight: 600; color: var(--ink); min-width: 120px; max-width: 340px; }
 .title-input:hover { border-color: var(--line); }
@@ -285,3 +282,32 @@ button:focus-visible { outline-offset: 2px; }
 .ghost.icon-only { padding: .5rem; }
 .ghost.icon-only svg { width: 18px; height: 18px; display: block; }
 #toggle-comments.active { color: var(--primary); border-color: var(--primary); }
+
+/* ===== Edición enriquecida: barra de formato + editor de bloques ===== */
+.format-bar { position: absolute; top: .5rem; left: 50%; transform: translateX(-50%); z-index: 8; display: flex; align-items: center; flex-wrap: wrap; justify-content: center; gap: 2px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm); box-shadow: var(--shadow); padding: .22rem; max-width: calc(100% - 1.5rem); }
+.format-bar[hidden] { display: none; }
+/* Hueco para la barra de formato: altura real medida por JS (var --fbh) */
+.doc-area.editing .stage { top: calc(var(--fbh, 42px) + 16px); }
+
+.fbtn, .bbtn { width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; background: transparent; border: 0; border-radius: 6px; color: var(--ink); cursor: pointer; padding: 0; font-size: .85rem; }
+.fbtn:hover, .bbtn:hover { background: var(--surface-2); }
+.fbtn.active { background: var(--surface-2); color: var(--primary); }
+.fbtn svg, .bbtn svg { width: 16px; height: 16px; }
+.fglyph { font-weight: 500; line-height: 1; }
+.fsep { width: 1px; height: 20px; background: var(--line); margin: 0 .3rem; flex: 0 0 auto; }
+.fselect { font: inherit; font-size: .8rem; padding: .2rem .35rem; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); }
+.fcolor { position: relative; overflow: hidden; }
+.fcolor input, .bswatch input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+
+/* Overlays del editor de bloques: viven en el padre, nunca dentro del documento */
+.edit-overlays { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 7; }
+.edit-overlays[hidden] { display: none; }
+.block-outline { position: absolute; border: 1.5px solid var(--ring); border-radius: 4px; pointer-events: none; }
+.block-outline[hidden] { display: none; }
+.block-bar { position: absolute; pointer-events: auto; display: flex; align-items: center; gap: 2px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow); padding: .18rem; }
+.block-bar[hidden] { display: none; }
+.block-tag { font-size: .66rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; padding: 0 .4rem; }
+.bbtn { width: 26px; height: 26px; }
+.bbtn.danger { color: var(--danger); }
+.bswatch { position: relative; }
+.bswatch .swatch { width: 14px; height: 14px; border-radius: 4px; border: 1px solid var(--line); background: #c6ffad; display: block; }

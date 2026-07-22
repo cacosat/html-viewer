@@ -27,6 +27,38 @@
   </header>
   <main class="viewer-main has-comments">
     <div class="doc-area">
+      <!-- Barra de formato: visible solo en "Editar texto". Vive fuera del iframe,
+           así nada de esta UI termina dentro del HTML guardado. -->
+      <div class="format-bar" id="formatBar" hidden>
+        <button class="fbtn" data-cmd="undo" title="Deshacer (Ctrl/Cmd+Z)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg></button>
+        <button class="fbtn" data-cmd="redo" title="Rehacer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 14 20 9 15 4"/><path d="M4 20v-7a4 4 0 0 1 4-4h12"/></svg></button>
+        <span class="fsep"></span>
+        <select class="fselect" id="blockFormat" title="Formato de bloque">
+          <option value="">Estilo</option>
+          <option value="p">Párrafo</option>
+          <option value="h1">Título 1</option>
+          <option value="h2">Título 2</option>
+          <option value="h3">Título 3</option>
+        </select>
+        <span class="fsep"></span>
+        <button class="fbtn" data-cmd="bold" title="Negrita (Ctrl/Cmd+B)"><span class="fglyph" style="font-weight:700">B</span></button>
+        <button class="fbtn" data-cmd="italic" title="Cursiva (Ctrl/Cmd+I)"><span class="fglyph" style="font-style:italic">I</span></button>
+        <button class="fbtn" data-cmd="underline" title="Subrayado (Ctrl/Cmd+U)"><span class="fglyph" style="text-decoration:underline">U</span></button>
+        <button class="fbtn" data-cmd="strikeThrough" title="Tachado"><span class="fglyph" style="text-decoration:line-through">S</span></button>
+        <label class="fbtn fcolor" title="Color de texto"><span class="fglyph" id="foreSwatch" style="border-bottom:3px solid #4b75f7">A</span><input type="color" id="foreColor" value="#4b75f7"></label>
+        <span class="fsep"></span>
+        <button class="fbtn" data-cmd="insertUnorderedList" title="Lista"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></button>
+        <button class="fbtn" data-cmd="insertOrderedList" title="Lista numerada"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><text x="1" y="8" font-size="8" fill="currentColor" stroke="none">1</text><text x="1" y="15" font-size="8" fill="currentColor" stroke="none">2</text><text x="1" y="22" font-size="8" fill="currentColor" stroke="none">3</text><line x1="9" y1="6" x2="21" y2="6"/><line x1="9" y1="13" x2="21" y2="13"/><line x1="9" y1="20" x2="21" y2="20"/></svg></button>
+        <span class="fsep"></span>
+        <button class="fbtn" data-cmd="justifyLeft" title="Alinear a la izquierda"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="15" y2="12"/><line x1="3" y1="18" x2="18" y2="18"/></svg></button>
+        <button class="fbtn" data-cmd="justifyCenter" title="Centrar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="6" y1="12" x2="18" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg></button>
+        <button class="fbtn" data-cmd="justifyRight" title="Alinear a la derecha"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="9" y1="12" x2="21" y2="12"/><line x1="6" y1="18" x2="21" y2="18"/></svg></button>
+        <span class="fsep"></span>
+        <button class="fbtn" id="linkBtn" title="Insertar enlace"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5"/></svg></button>
+        <button class="fbtn" data-cmd="unlink" title="Quitar enlace"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5"/><line x1="2" y1="2" x2="22" y2="22"/></svg></button>
+        <button class="fbtn" data-cmd="removeFormat" title="Limpiar formato"><span class="fglyph"><s>T</s>ₓ</span></button>
+      </div>
+
       <!-- Vista interactiva -->
       <div class="stage" id="viewStage">
         <iframe id="viewFrame" sandbox="allow-scripts allow-forms allow-popups allow-modals allow-downloads"></iframe>
@@ -39,9 +71,27 @@
       <div class="pane" id="codePane" hidden>
         <textarea id="code" spellcheck="false"></textarea>
       </div>
-      <div class="edit-hint" id="editHint" hidden>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-        <span>Modo edición — haz clic en el texto para modificarlo</span>
+
+      <!-- Overlays del editor de bloques: resaltado + mini-barra del bloque activo.
+           Son hermanos del iframe (no hijos del documento) => jamás se guardan. -->
+      <div class="edit-overlays" id="editOverlays" hidden>
+        <div class="block-outline" id="blockOutline" hidden></div>
+        <div class="block-bar" id="blockBar" hidden>
+          <span class="block-tag" id="blockTag">p</span>
+          <button class="bbtn" data-act="parent" title="Seleccionar contenedor"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 11 12 6 7 11"/><polyline points="17 18 12 13 7 18"/></svg></button>
+          <span class="fsep"></span>
+          <button class="bbtn" data-act="up" title="Mover arriba"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></button>
+          <button class="bbtn" data-act="down" title="Mover abajo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg></button>
+          <button class="bbtn" data-act="dup" title="Duplicar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+          <span class="fsep"></span>
+          <button class="bbtn" data-act="smaller" title="Texto más chico"><span class="fglyph" style="font-size:.68rem">A−</span></button>
+          <button class="bbtn" data-act="bigger" title="Texto más grande"><span class="fglyph">A+</span></button>
+          <label class="bbtn bswatch" title="Color de fondo del bloque"><span class="swatch" id="bgSwatch"></span><input type="color" id="blockBg" value="#c6ffad"></label>
+          <button class="bbtn" data-act="resetStyle" title="Restablecer estilos del bloque"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg></button>
+          <span class="fsep"></span>
+          <button class="bbtn" data-act="hide" title="Ocultar bloque (recuperable desde Código)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg></button>
+          <button class="bbtn danger" data-act="del" title="Eliminar bloque (Ctrl/Cmd+Z deshace)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>
+        </div>
       </div>
     </div>
     <aside class="comments" id="comments">

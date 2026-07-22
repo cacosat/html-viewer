@@ -224,13 +224,22 @@ Claro en `:root`, oscuro en `:root[data-theme="dark"]` (oscuro = Foundation Purp
 ### 11.5 Páginas
 - **`index.html` + `login.js`** — Login en **2 pasos**: (1) token → `POST /auth/login`; (2) dropdown de perfiles + "Crear perfil" (modal). Al elegir, guarda el perfil en `localStorage` y va a `/library`. Si ya hay sesión y perfil, salta directo.
 - **`library.html` + `library.js`** — Topbar con logo, selector de tema y **menú de perfil** (avatar + nombre; switch de perfil / crear / salir). Sección de subida (archivo, título, **visibilidad pública/privada**) con el banner del failsafe. **Tabs**: *Mis archivos* (`?profile_id=`) y *Público* (`?scope=public`). Cada doc es una **card** con **thumbnail** (iframe a `/raw` escalado, lazy con `IntersectionObserver`), badges (perfil, Público/Privado) y **acciones solo-ícono** (compartir → `shareModal`, descargar, eliminar). El título/thumbnail abren `/doc/:id`.
-- **`viewer.html` + `viewer.js`** — Topbar: volver, título editable, **3 pestañas**, selector de tema, **Presentar**, **Compartir** (`shareModal`), Guardar. Superficies en **hoja delimitada** (`.stage`): Vista (`#viewFrame`, interactiva), Editar texto (`#editFrame`, `designMode`, con anillo + hint), Código (`#codePane` con CodeMirror, carga diferida). `content` es la fuente de verdad (se sincroniza desde la superficie visible). Guarda con `PUT`; `beforeunload` avisa cambios sin guardar. La hoja usa `max-width: 1300px` (márgenes laterales chicos). A la derecha hay una **barra de comentarios** (`.comments`) con la lista + caja para agregar (autor = perfil activo); se **oculta/muestra** con un toggle en la topbar (preferencia en `localStorage` `hv-comments`) y en pantallas angostas se apila debajo del documento.
+- **`viewer.html` + `viewer.js`** — Topbar: volver, título editable, **3 pestañas**, selector de tema, **Presentar**, **Compartir** (`shareModal`), Guardar. Superficies en **hoja delimitada** (`.stage`): Vista (`#viewFrame`, interactiva), Editar texto (`#editFrame`, `designMode`, con anillo, **barra de formato** y **editor de bloques** — ver §11.6), Código (`#codePane` con CodeMirror, carga diferida). `content` es la fuente de verdad (se sincroniza desde la superficie visible). Guarda con `PUT`; `beforeunload` avisa cambios sin guardar. La hoja usa `max-width: 1300px` (márgenes laterales chicos). A la derecha hay una **barra de comentarios** (`.comments`) con la lista + caja para agregar (autor = perfil activo); se **oculta/muestra** con un toggle en la topbar (preferencia en `localStorage` `hv-comments`) y en pantallas angostas se apila debajo del documento.
 - **`shared.html` + `shared.js`** — Vista pública: logo (enlaza a `/`), título, tema, **Presentar**, Descargar. Consulta `/api/shared/:shareId`; si es **privado** (403) muestra "Documento privado"; si existe, carga el iframe a `/raw` en una hoja delimitada.
 
-### 11.6 Modo presentación (`presentMode`)
+### 11.6 Edición enriquecida (barra de formato + editor de bloques)
+
+El modo **Editar texto** sigue siendo `designMode` sobre el DOM real (no una librería RTE que reinterprete el documento), extendido con dos capas de UI que viven **fuera del iframe** — por eso jamás se serializan dentro del HTML guardado:
+
+- **Barra de formato** (`#formatBar`, flotante arriba): deshacer/rehacer, estilo de bloque (P/H1–H3 vía `formatBlock`), negrita/cursiva/subrayado/tachado, color de texto, listas, alineación, insertar/quitar enlace y limpiar formato. Implementada con `document.execCommand` sobre el `contentDocument` (con `styleWithCSS` activado para generar spans con CSS en vez de tags legacy). Los botones hacen `preventDefault` en `mousedown` para no robar el foco; para los controles que sí lo roban (select, color picker) se restaura la última selección guardada (`savedRange`) antes de ejecutar. El hueco sobre el documento sigue la altura real de la barra (CSS var `--fbh` actualizada por ResizeObserver).
+- **Editor de bloques** (modelo "bloque activo"): al poner el cursor en cualquier parte, se calcula el bloque ancestro más cercano (p, h1–h6, li, tr, table, div, section, …; las celdas td/th resuelven a su **fila**) y aparecen un **contorno** (`#blockOutline`) y una **mini-barra** (`#blockBar`) anclados a él, como overlays del padre posicionados con `getBoundingClientRect` (se reposicionan en scroll/resize/input). Acciones: escalar al **contenedor**, mover ↑/↓ (`insertBefore` entre hermanos), duplicar, A−/A+ (font-size del bloque), color de fondo, restablecer estilos, ocultar (`display:none`, recuperable desde Código) y eliminar — el borrado se hace seleccionando el bloque y `execCommand('delete')`, así **Ctrl/Cmd+Z lo deshace**.
+
+Toda mutación sincroniza `content` (`readEditFrame`) y marca el documento como modificado; los `<script>` del reporte siguen inertes y preservados.
+
+### 11.7 Modo presentación (`presentMode`)
 Overlay a pantalla completa (usa la **Fullscreen API**; si falla, queda como overlay fijo) con barra de controles: **zoom −/+**, indicador %, **Ajustar** (reset) y **Salir**. Atajos: `+`/`-` zoom, `0` ajustar, `Esc` salir. El zoom es real (`transform: scale`) con un wrap dimensionado para permitir scroll/pan al acercar. Se invoca desde el visor (con `srcdoc` del contenido actual) y desde la página compartida (con `src=/raw/:shareId`).
 
-### 11.7 Patrón datos → DOM
+### 11.8 Patrón datos → DOM
 Listas con template strings + `escapeHtml` vía `innerHTML`; handlers por **delegación**. Tras una mutación se vuelve a llamar la función de carga.
 
 ---
@@ -275,5 +284,6 @@ Despliegue: `wrangler d1 create`, `wrangler r2 bucket create`, `npm run db:migra
 - Sin búsqueda ni carpetas en la biblioteca.
 - `/raw` se sirve desde el mismo origin (idealmente, subdominio aparte).
 - Perfil = atribución/vista por navegador, no cuenta (un solo token de acceso global).
-- Editor de texto = `designMode` (básico); el de código sí tiene resaltado.
+- La edición visual cubre formato de texto y operaciones de bloque; aún no hay inserción de imágenes ni edición asistida por IA.
+- Mover/duplicar/ocultar bloques no entra al stack de deshacer del navegador (eliminar sí, vía `execCommand`).
 - Thumbnails = iframes en vivo escalados (no pre-renderizados); con bibliotecas muy grandes conviene pre-render server-side.

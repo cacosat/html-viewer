@@ -4,13 +4,13 @@ const id = location.pathname.split("/").filter(Boolean).pop();
 const viewStage = document.getElementById("viewStage");
 const editStage = document.getElementById("editStage");
 const codePane = document.getElementById("codePane");
-const editHint = document.getElementById("editHint");
 const viewFrame = document.getElementById("viewFrame");
 const editFrame = document.getElementById("editFrame");
 const codeEl = document.getElementById("code");
 const titleEl = document.getElementById("title");
 const saveBtn = document.getElementById("save");
 const tabButtons = [...document.querySelectorAll(".tabs button")];
+const docArea = document.querySelector(".doc-area");
 
 let doc = null;
 let content = "";   // fuente de verdad del HTML, siempre al día
@@ -96,7 +96,12 @@ async function setTab(tab) {
   viewStage.hidden = tab !== "view";
   editStage.hidden = tab !== "text";
   codePane.hidden = tab !== "code";
-  editHint.hidden = tab !== "text";
+
+  const editing = tab === "text";
+  docArea.classList.toggle("editing", editing);
+  formatBar.hidden = !editing;
+  editOverlays.hidden = !editing;
+  if (!editing) hideBlockUI();
 
   if (tab === "view") {
     viewFrame.srcdoc = content;
@@ -105,7 +110,10 @@ async function setTab(tab) {
       try {
         const d = editFrame.contentDocument;
         d.designMode = "on";
-        d.addEventListener("input", () => { content = readEditFrame(); markDirty(); });
+        // Formato como CSS inline (spans con style) y Enter crea <p>.
+        try { d.execCommand("styleWithCSS", false, true); d.execCommand("defaultParagraphSeparator", false, "p"); } catch { /* noop */ }
+        d.addEventListener("input", () => { content = readEditFrame(); markDirty(); requestAnimationFrame(positionBlockUI); });
+        attachEdit(d);
       } catch (_) { /* algún navegador podría bloquearlo */ }
     };
     editFrame.srcdoc = content;
@@ -153,6 +161,221 @@ document.getElementById("present").addEventListener("click", () => {
   captureCurrent();
   presentMode({ srcdoc: content });
 });
+
+// ============================================================
+// Edición enriquecida: barra de formato + editor de bloques.
+// Toda la UI vive FUERA del iframe (overlays en el padre), así
+// jamás se serializa dentro del HTML guardado.
+// ============================================================
+const formatBar = document.getElementById("formatBar");
+const editOverlays = document.getElementById("editOverlays");
+const blockBar = document.getElementById("blockBar");
+const blockOutline = document.getElementById("blockOutline");
+const blockTag = document.getElementById("blockTag");
+const blockFormatSel = document.getElementById("blockFormat");
+const foreColorInput = document.getElementById("foreColor");
+const foreSwatch = document.getElementById("foreSwatch");
+const blockBgInput = document.getElementById("blockBg");
+const bgSwatch = document.getElementById("bgSwatch");
+
+let edDoc = null;       // document del iframe en edición
+let edWin = null;       // window del iframe en edición
+let savedRange = null;  // última selección conocida (para restaurar tras usar la toolbar)
+let activeBlock = null; // bloque activo (modelo A: donde está el cursor)
+
+// td/th excluidos a propósito: el caret en una celda selecciona la FILA (tr).
+const BLOCK_SEL = "p,h1,h2,h3,h4,h5,h6,ul,ol,li,table,tr,blockquote,pre,figure,figcaption,section,article,header,footer,aside,nav,div,form,fieldset";
+
+function attachEdit(d) {
+  edDoc = d;
+  edWin = editFrame.contentWindow;
+  savedRange = null;
+  activeBlock = null;
+  hideBlockUI();
+  d.addEventListener("selectionchange", onEditSelection);
+  d.addEventListener("mouseup", onEditSelection);
+  d.addEventListener("keyup", onEditSelection);
+  edWin.addEventListener("scroll", () => positionBlockUI(), true);
+}
+
+function ancestorBlock(node) {
+  if (!edDoc) return null;
+  let el = node && (node.nodeType === 1 ? node : node.parentElement);
+  if (!el || !el.closest) return null;
+  const b = el.closest(BLOCK_SEL);
+  return b && b !== edDoc.body && b !== edDoc.documentElement && edDoc.body.contains(b) ? b : null;
+}
+
+function onEditSelection() {
+  if (!edDoc) return;
+  try {
+    const sel = edWin.getSelection();
+    if (sel && sel.rangeCount) {
+      savedRange = sel.getRangeAt(0).cloneRange();
+      activeBlock = ancestorBlock(sel.getRangeAt(0).startContainer);
+    }
+  } catch { /* noop */ }
+  updateToolbarState();
+  positionBlockUI();
+}
+
+function syncEdit() { content = readEditFrame(); markDirty(); }
+
+// Ejecuta un comando de edición restaurando la selección (los botones de la
+// toolbar no roban el foco gracias al preventDefault en mousedown, pero el
+// select y los pickers de color sí — savedRange cubre esos casos).
+function exec(cmd, val = null) {
+  if (!edDoc) return;
+  try {
+    edWin.focus();
+    const sel = edWin.getSelection();
+    if (savedRange) { sel.removeAllRanges(); sel.addRange(savedRange); }
+    edDoc.execCommand(cmd, false, val);
+    syncEdit();
+    updateToolbarState();
+    requestAnimationFrame(positionBlockUI);
+  } catch { /* noop */ }
+}
+
+const STATE_CMDS = ["bold", "italic", "underline", "strikeThrough", "insertUnorderedList", "insertOrderedList", "justifyLeft", "justifyCenter", "justifyRight"];
+function updateToolbarState() {
+  if (!edDoc || formatBar.hidden) return;
+  for (const btn of formatBar.querySelectorAll("[data-cmd]")) {
+    const c = btn.dataset.cmd;
+    if (!STATE_CMDS.includes(c)) continue;
+    let on = false;
+    try { on = edDoc.queryCommandState(c); } catch { /* noop */ }
+    btn.classList.toggle("active", on);
+  }
+  let v = "";
+  try { v = String(edDoc.queryCommandValue("formatBlock")).toLowerCase(); } catch { /* noop */ }
+  blockFormatSel.value = ["p", "h1", "h2", "h3"].includes(v) ? v : "";
+}
+
+// --- Wiring de la barra de formato ---
+formatBar.addEventListener("mousedown", (e) => { if (!e.target.closest("select,input")) e.preventDefault(); });
+formatBar.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-cmd]");
+  if (b) exec(b.dataset.cmd);
+});
+blockFormatSel.addEventListener("change", () => {
+  if (blockFormatSel.value) exec("formatBlock", "<" + blockFormatSel.value + ">");
+});
+document.getElementById("linkBtn").addEventListener("click", () => {
+  const url = prompt("URL del enlace:", "https://");
+  if (url && url !== "https://") exec("createLink", url);
+});
+foreColorInput.addEventListener("change", () => {
+  foreSwatch.style.borderBottomColor = foreColorInput.value;
+  exec("foreColor", foreColorInput.value);
+});
+
+// --- Editor de bloques (modelo A: mini-barra anclada al bloque del cursor) ---
+function hideBlockUI() { blockBar.hidden = true; blockOutline.hidden = true; }
+
+function positionBlockUI() {
+  if (editStage.hidden || !edDoc || !activeBlock || !activeBlock.isConnected) { hideBlockUI(); return; }
+  let r;
+  try { r = activeBlock.getBoundingClientRect(); } catch { hideBlockUI(); return; }
+  if (!r.width && !r.height) { hideBlockUI(); return; } // display:none u oculto
+  const ifr = editFrame.getBoundingClientRect();
+  const da = docArea.getBoundingClientRect();
+  const ox = ifr.left - da.left, oy = ifr.top - da.top;
+
+  blockOutline.style.top = oy + r.top + "px";
+  blockOutline.style.left = ox + r.left + "px";
+  blockOutline.style.width = r.width + "px";
+  blockOutline.style.height = r.height + "px";
+  blockOutline.hidden = false;
+
+  blockTag.textContent = activeBlock.tagName.toLowerCase();
+  blockBar.hidden = false;
+  const bw = blockBar.offsetWidth, bh = blockBar.offsetHeight;
+  let top = oy + r.top - bh - 6;
+  if (top < oy + 4) top = oy + r.bottom + 6; // no cabe arriba → debajo del bloque
+  top = Math.min(Math.max(top, oy + 4), oy + ifr.height - bh - 4);
+  let left = ox + r.left;
+  left = Math.min(Math.max(left, ox + 4), Math.max(ox + 4, ox + ifr.width - bw - 4));
+  blockBar.style.top = top + "px";
+  blockBar.style.left = left + "px";
+}
+
+blockBar.addEventListener("mousedown", (e) => { if (!e.target.closest("input")) e.preventDefault(); });
+blockBar.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-act]");
+  if (!b || !edDoc || !activeBlock || !activeBlock.isConnected) return;
+  const el = activeBlock;
+  const p = el.parentElement;
+
+  if (b.dataset.act === "parent") {
+    if (p && p !== edDoc.body && p !== edDoc.documentElement) { activeBlock = p; positionBlockUI(); }
+    return; // no muta el documento
+  }
+
+  switch (b.dataset.act) {
+    case "up":
+      if (el.previousElementSibling) { p.insertBefore(el, el.previousElementSibling); el.scrollIntoView({ block: "nearest" }); }
+      break;
+    case "down":
+      if (el.nextElementSibling) { p.insertBefore(el.nextElementSibling, el); el.scrollIntoView({ block: "nearest" }); }
+      break;
+    case "dup":
+      el.after(el.cloneNode(true));
+      break;
+    case "smaller":
+    case "bigger": {
+      const cur = parseFloat(edWin.getComputedStyle(el).fontSize) || 16;
+      const next = b.dataset.act === "bigger" ? cur * 1.15 : cur / 1.15;
+      el.style.fontSize = Math.min(96, Math.max(8, Math.round(next))) + "px";
+      break;
+    }
+    case "resetStyle":
+      el.style.backgroundColor = "";
+      el.style.fontSize = "";
+      el.style.display = "";
+      if (!el.getAttribute("style")) el.removeAttribute("style");
+      break;
+    case "hide":
+      el.style.display = "none";
+      hideBlockUI();
+      toast("Bloque oculto — recuperable desde la pestaña Código");
+      break;
+    case "del": {
+      // Vía selección + execCommand para que Ctrl/Cmd+Z pueda deshacerlo.
+      try {
+        const r = edDoc.createRange();
+        r.selectNode(el);
+        const sel = edWin.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(r);
+        edDoc.execCommand("delete");
+        edWin.focus();
+      } catch { el.remove(); }
+      activeBlock = null;
+      hideBlockUI();
+      toast("Bloque eliminado — Ctrl/Cmd+Z para deshacer");
+      break;
+    }
+  }
+  syncEdit();
+  requestAnimationFrame(positionBlockUI);
+});
+
+blockBgInput.addEventListener("input", () => {
+  if (activeBlock && activeBlock.isConnected) {
+    activeBlock.style.backgroundColor = blockBgInput.value;
+    bgSwatch.style.background = blockBgInput.value;
+  }
+});
+blockBgInput.addEventListener("change", () => { syncEdit(); });
+
+// Reposicionar overlays ante cambios de layout (toggle comentarios, resize, etc.).
+new ResizeObserver(() => positionBlockUI()).observe(editFrame);
+window.addEventListener("resize", positionBlockUI);
+// El hueco sobre el documento sigue la altura real de la barra (puede envolver a 2 filas).
+new ResizeObserver(() => {
+  docArea.style.setProperty("--fbh", formatBar.offsetHeight + "px");
+}).observe(formatBar);
 
 // ---- Comentarios ----
 const profile = getProfile();

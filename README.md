@@ -27,7 +27,7 @@ Plataforma para **guardar, ver, editar, presentar y compartir archivos HTML** (r
 - **Editor**: pestañas *Vista* (interactiva), *Editar texto* y *Código* (CodeMirror); el documento se muestra como una hoja delimitada.
 - **Edición enriquecida** en *Editar texto*: **barra de formato** (deshacer/rehacer, títulos, negrita/cursiva/subrayado, color, listas, alineación, enlaces) y **editor de bloques** — al hacer clic en un elemento aparece una mini-barra para moverlo ↑/↓, duplicarlo, ocultarlo, eliminarlo (con Ctrl/Cmd+Z para deshacer), cambiar tamaño de texto o color de fondo, y escalar la selección al contenedor. Todo opera sobre el DOM real: no rompe el HTML ni los scripts del reporte.
 - **Modo presentación**: pantalla completa con zoom (+/−), atajos de teclado (`+` `-` `0` `Esc`).
-- **Comentarios** por documento en el visor: barra lateral (ocultable con un toggle en la barra superior) que en pantallas angostas se apila debajo del documento.
+- **Comentarios** por documento en el visor: barra lateral (ocultable con un toggle en la barra superior) que en pantallas angostas se apila debajo del documento. Cada comentario se puede **resolver** (pasa a un desplegable "Resueltos", con quién y cuándo; se puede **reabrir**) o **eliminar** (con confirmación); el encabezado muestra cuántos quedan abiertos.
 - **Failsafe de almacenamiento**: a 7 GB de uso en R2 se bloquean las subidas con un aviso, para no exceder el plan gratuito (10 GB).
 
 ## Diseño y temas
@@ -85,7 +85,7 @@ npm run deploy
 
 ```
 wrangler.jsonc          Config del Worker (assets, D1, R2)
-migrations/             Esquema SQL de D1 (0001 base, 0002 perfiles+visibilidad, 0003 comentarios)
+migrations/             Esquema SQL de D1 (0001 base, 0002 perfiles+visibilidad, 0003 comentarios, 0004 comentarios resueltos)
 src/
   index.js              Router: API + contenido + assets + failsafe de storage
   auth.js               Sesión por cookie firmada (HMAC)
@@ -117,6 +117,7 @@ DOCS.md                     Mapa técnico detallado del codebase
 | POST | `/api/documents` | sí | Sube documento (con visibilidad) |
 | GET/PUT/DELETE | `/api/documents/:id` | sí | Lee (con contenido) / actualiza (incl. `public`) / elimina |
 | GET/POST | `/api/documents/:id/comments` | sí | Lista / agrega comentarios |
+| PATCH | `/api/comments/:id` | sí | Resuelve / reabre (`{resolved, by}`) |
 | DELETE | `/api/comments/:id` | sí | Elimina un comentario |
 | GET | `/api/shared/:shareId` | — (privado: 403) | Metadatos públicos |
 | GET | `/raw/:shareId` | público o sesión si privado | Contenido HTML aislado (`?download`) |

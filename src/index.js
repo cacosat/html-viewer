@@ -158,7 +158,7 @@ async function handleApi(request, env, path) {
     const docId = decodeURIComponent(commentsMatch[1]);
     if (request.method === "GET") {
       const r = await env.DB.prepare(
-        "SELECT id, author, body, created_at FROM comments WHERE document_id = ? ORDER BY created_at",
+        "SELECT id, author, body, created_at, resolved, resolved_by, resolved_at FROM comments WHERE document_id = ? ORDER BY created_at",
       ).bind(docId).all();
       return json(r.results);
     }
@@ -173,10 +173,27 @@ async function handleApi(request, env, path) {
     }
     return badRequest("Método no soportado");
   }
-  const commentDel = path.match(/^\/api\/comments\/(\d+)$/);
-  if (commentDel && request.method === "DELETE") {
-    await env.DB.prepare("DELETE FROM comments WHERE id = ?").bind(Number(commentDel[1])).run();
-    return new Response(null, { status: 204 });
+  // --- Un comentario: eliminar / resolver-reabrir ---
+  const commentMatch = path.match(/^\/api\/comments\/(\d+)$/);
+  if (commentMatch) {
+    const cid = Number(commentMatch[1]);
+    if (request.method === "DELETE") {
+      const res = await env.DB.prepare("DELETE FROM comments WHERE id = ?").bind(cid).run();
+      if (!(res.meta && res.meta.changes)) return notFound();
+      return new Response(null, { status: 204 });
+    }
+    if (request.method === "PATCH") {
+      const b = await request.json().catch(() => null);
+      if (!b || typeof b !== "object" || !("resolved" in b)) return badRequest("Se espera {resolved}");
+      const resolved = b.resolved === true || b.resolved === 1;
+      const by = (b.by ? String(b.by) : "").trim().slice(0, 80) || null;
+      const res = resolved
+        ? await env.DB.prepare("UPDATE comments SET resolved = 1, resolved_by = ?, resolved_at = datetime('now') WHERE id = ?").bind(by, cid).run()
+        : await env.DB.prepare("UPDATE comments SET resolved = 0, resolved_by = NULL, resolved_at = NULL WHERE id = ?").bind(cid).run();
+      if (!(res.meta && res.meta.changes)) return notFound();
+      return json({ ok: true, resolved });
+    }
+    return badRequest("Método no soportado");
   }
 
   const docMatch = path.match(/^\/api\/documents\/([^/]+)$/);

@@ -381,18 +381,80 @@ new ResizeObserver(() => {
 const profile = getProfile();
 const commentsList = document.getElementById("comments-list");
 const commentsForm = document.getElementById("comments-form");
+const commentsCount = document.getElementById("comments-count");
+let resolvedOpen = false; // estado del desplegable "Resueltos" entre re-renders
 
-async function loadComments() {
+const CICON = {
+  check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>',
+  reopen: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>',
+  trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>',
+};
+
+function commentHtml(c) {
+  const resolved = !!c.resolved;
+  const toggle = resolved
+    ? `<button class="cbtn" data-cact="reopen" title="Reabrir comentario">${CICON.reopen}Reabrir</button>`
+    : `<button class="cbtn" data-cact="resolve" title="Marcar como resuelto">${CICON.check}Resolver</button>`;
+  const note = resolved
+    ? `<div class="comment-resolved-note">${CICON.check}Resuelto${c.resolved_by ? " por " + escapeHtml(c.resolved_by) : ""}${c.resolved_at ? " · " + fmtDate(c.resolved_at) : ""}</div>`
+    : "";
+  return `<div class="comment${resolved ? " resolved" : ""}" data-cid="${c.id}">
+    <div class="comment-head"><span class="comment-author">${escapeHtml(c.author || "—")}</span><span class="comment-date">${fmtDate(c.created_at)}</span></div>
+    <div class="comment-body">${escapeHtml(c.body)}</div>${note}
+    <div class="comment-actions">${toggle}<button class="cbtn icon danger" data-cact="delete" title="Eliminar comentario" aria-label="Eliminar comentario">${CICON.trash}</button></div>
+  </div>`;
+}
+
+async function loadComments({ scrollToEnd = false } = {}) {
   try {
     const cs = await (await api(`/api/documents/${id}/comments`)).json();
-    commentsList.innerHTML = cs.length
-      ? cs.map((c) =>
-          `<div class="comment"><div class="comment-head"><span class="comment-author">${escapeHtml(c.author || "—")}</span><span class="comment-date">${fmtDate(c.created_at)}</span></div><div class="comment-body">${escapeHtml(c.body)}</div></div>`,
-        ).join("")
-      : `<p class="muted comments-empty">Sin comentarios aún.</p>`;
+    const open = cs.filter((c) => !c.resolved);
+    const done = cs.filter((c) => c.resolved);
+    const prevScroll = commentsList.scrollTop;
+    let html = open.length
+      ? open.map(commentHtml).join("")
+      : `<p class="muted comments-empty">${done.length ? "No hay comentarios abiertos." : "Sin comentarios aún."}</p>`;
+    if (done.length) {
+      html += `<details class="comments-resolved"${resolvedOpen ? " open" : ""}><summary>Resueltos (${done.length})</summary>${done.map(commentHtml).join("")}</details>`;
+    }
+    commentsList.innerHTML = html;
+    commentsCount.textContent = String(open.length);
+    commentsCount.hidden = !open.length;
+    const det = commentsList.querySelector(".comments-resolved");
+    if (det) det.addEventListener("toggle", () => { resolvedOpen = det.open; });
+    if (!scrollToEnd) {
+      commentsList.scrollTop = prevScroll;
+      return;
+    }
     commentsList.scrollTop = commentsList.scrollHeight;
+    // Con "Resueltos" abierto, el último comentario abierto queda sobre esa lista: traerlo a la vista.
+    const lastOpen = [...commentsList.querySelectorAll(":scope > .comment")].pop();
+    if (lastOpen && resolvedOpen) {
+      commentsList.scrollTop += lastOpen.getBoundingClientRect().bottom - commentsList.getBoundingClientRect().bottom + 16;
+    }
   } catch { /* noop */ }
 }
+
+// Resolver / reabrir / eliminar (delegación sobre la lista).
+commentsList.addEventListener("click", async (e) => {
+  const btn = e.target.closest("[data-cact]");
+  const cid = btn && btn.closest(".comment") && btn.closest(".comment").dataset.cid;
+  if (!cid) return;
+  const act = btn.dataset.cact;
+  if (act === "delete" && !confirm("¿Eliminar este comentario? No se puede deshacer.")) return;
+  btn.disabled = true;
+  try {
+    const res = act === "delete"
+      ? await api(`/api/comments/${cid}`, { method: "DELETE" })
+      : await api(`/api/comments/${cid}`, { method: "PATCH", body: { resolved: act === "resolve", by: (profile && profile.name) || null } });
+    // Un 404 al eliminar significa que alguien más ya lo borró: el resultado es el mismo.
+    if (!res.ok && !(act === "delete" && res.status === 404)) throw new Error(String(res.status));
+    if (act === "delete") toast("Comentario eliminado");
+  } catch {
+    toast("No se pudo actualizar el comentario");
+  }
+  await loadComments();
+});
 
 commentsForm.addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -405,7 +467,7 @@ commentsForm.addEventListener("submit", async (e) => {
     const res = await api(`/api/documents/${id}/comments`, { method: "POST", body: { author: (profile && profile.name) || "Anónimo", body } });
     if (!res.ok) throw new Error();
     ta.value = "";
-    await loadComments();
+    await loadComments({ scrollToEnd: true });
   } catch {
     toast("No se pudo comentar");
   } finally {
@@ -438,7 +500,7 @@ async function load() {
   titleEl.value = doc.title || "";
   document.title = (doc.title || "Documento") + " · Reuse";
   setTab("view");
-  loadComments();
+  loadComments({ scrollToEnd: true });
 }
 
 load();

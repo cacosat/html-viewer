@@ -20,10 +20,10 @@ Plataforma para **guardar, ver, editar, presentar y compartir archivos HTML** (r
 
 ## Funcionalidades
 
-- **Navegación tipo Obsidian**: ribbon de íconos (explorador, biblioteca, subir, buscar, tema, perfil), **explorador** lateral con *Mis archivos* y *Públicos* (filtro y medidor de almacenamiento) y **panel** derecho del documento. En móvil, ambos laterales son cajones.
+- **Navegación tipo Obsidian**: ribbon de íconos (explorador, biblioteca, subir, buscar, tema, perfil), **explorador** lateral con *Públicos* y *Mis archivos* (filtro y medidor de almacenamiento) y **panel** derecho del documento. En móvil, ambos laterales son cajones.
 - **Buscador rápido** con `⌘K` / `Ctrl+K` (documentos y acciones) y **subida por arrastre**: suelta un `.html` en cualquier parte.
 - **Perfiles en el login** (2 pasos: token → elegir/crear perfil). El perfil se cambia desde el avatar del ribbon.
-- **Biblioteca** con tabs *Mis archivos* / *Públicos* y tarjetas con **miniatura en vivo**, badges y acciones (compartir, descargar, eliminar).
+- **Biblioteca** con tabs *Públicos* (la vista por defecto al entrar) / *Mis archivos* (`/library?scope=mine`) y tarjetas con **miniatura en vivo**, badges y acciones (compartir, descargar, eliminar).
 - **Compartir**: modal con el link, *Copiar link* y el switch **Documento público**; también desde el panel *Detalles*.
 - **Visor** con modos **Vista · Editar · Código**, título editable, estado de guardado real ("Cambios sin guardar" se apaga si deshaces todo), **Guardar** (`⌘S`) y **Descartar cambios**.
 - **Edición** en *Editar*: barra de formato (estilos de párrafo, negrita/cursiva/subrayado/tachado, color y resaltado, listas y sangría, alineación, enlaces, imágenes, quitar formato) y **editor de bloques** con acciones en pares: contenedor ↔ interior, mover ↑/↓, duplicar / insertar debajo, A−/A+, fondo, ocultar ↔ mostrar (con *Ocultos* para recuperarlos), eliminar con *Deshacer*; en tablas, operaciones de **fila y columna**. **Deshacer/rehacer** cubre todo (texto, formato y bloques). La ruta del bloque se ve abajo. Todo opera sobre el DOM real: no rompe el HTML ni los scripts del reporte.

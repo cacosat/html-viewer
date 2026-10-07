@@ -1,5 +1,5 @@
 import { icon, hydrateIcons } from "/icons.js";
-import { api, escapeHtml, fmtShortDate, fmtSize, toast, shareModal, confirmDialog, errorMessage, pref, setPref } from "/common.js";
+import { api, escapeHtml, fmtShortDate, fmtSize, toast, shareModal, confirmDialog, errorMessage } from "/common.js";
 import { initShell, loadDocs, loadStorage, fmtGB } from "/shell.js";
 
 hydrateIcons();
@@ -11,13 +11,12 @@ const calloutEl = document.getElementById("storage-callout");
 const tabs = [...document.querySelectorAll(".lib-tabs .ui-tab")];
 const LABEL = { mine: "Mis archivos", public: "Públicos" };
 
-const fromUrl = new URLSearchParams(location.search).get("scope");
-let scope = fromUrl === "public" || fromUrl === "mine" ? fromUrl : pref("hv-lib-scope", "mine");
+// Se entra por defecto a Públicos; Mis archivos vive en ?scope=mine (así recargar o volver conserva la pestaña).
+let scope = new URLSearchParams(location.search).get("scope") === "mine" ? "mine" : "public";
 
 function setScope(s) {
   scope = s;
-  setPref("hv-lib-scope", s);
-  history.replaceState(null, "", s === "mine" ? "/library" : "/library?scope=public");
+  history.replaceState(null, "", s === "mine" ? "/library?scope=mine" : "/library");
   render();
 }
 for (const t of tabs) t.addEventListener("click", () => setScope(t.dataset.scope));

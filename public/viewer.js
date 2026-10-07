@@ -376,8 +376,8 @@ async function load() {
   titleEl.value = savedTitle;
   document.title = `${savedTitle || "Documento"} · Visor HTML`;
   const crumb = $("crumb-scope");
-  if (doc.profile_id === shell.profile.id) { crumb.textContent = "Mis archivos"; crumb.href = "/library"; }
-  else if (doc.public) { crumb.textContent = "Públicos"; crumb.href = "/library?scope=public"; }
+  if (doc.profile_id === shell.profile.id) { crumb.textContent = "Mis archivos"; crumb.href = "/library?scope=mine"; }
+  else if (doc.public) { crumb.textContent = "Públicos"; crumb.href = "/library"; }
   else { crumb.textContent = "Biblioteca"; crumb.href = "/library"; }
   renderDetails();
   viewFrame.srcdoc = content;

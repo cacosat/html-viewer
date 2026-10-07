@@ -115,8 +115,8 @@ function renderExplorer() {
         <div class="input-icon">${icon("search", 14)}<input class="ui-input ui-input-sm" type="search" id="tree-filter" placeholder="Filtrar documentos" aria-label="Filtrar documentos" autocomplete="off"></div>
       </div>
       <nav class="explorer-tree" aria-label="Documentos">
-        ${section("mine", "Mis archivos")}
         ${section("public", "Públicos")}
+        ${section("mine", "Mis archivos")}
       </nav>
       <div class="explorer-foot">
         <div class="storage-row"><span class="overline">Almacenamiento</span><span class="code-sm subtle" id="storage-text">—</span></div>

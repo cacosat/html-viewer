@@ -4,10 +4,10 @@ Plataforma para **guardar, ver, editar, presentar y compartir archivos HTML** (r
 
 - Entras con un **token único** y eliges (o creas) un **perfil** (nombre, correo, área).
 - Subes un `.html` → queda en tu **biblioteca**, marcado como **público** o **privado**.
-- Lo **ves** renderizado, editas su **texto** (estilo Gmail) o su **código** (con números de línea y resaltado).
+- Lo **ves** renderizado, lo **editas** (texto, formato, bloques, tablas e imágenes, con deshacer/rehacer) o editas su **código** (con números de línea y resaltado).
 - Lo **presentas** a pantalla completa con zoom, ideal para una reunión.
 - Cada archivo tiene un **link para compartir**: público (abierto a cualquiera) o privado (exige iniciar sesión).
-- Interfaz con la identidad de **Reuse** y **tema claro/oscuro** (por defecto sigue el del sistema).
+- Interfaz con el sistema de diseño **"Joaquin"** (controles táctiles sobre superficies casi negras, un solo acento naranja) y **tema oscuro/claro** (por defecto sigue el del sistema).
 
 > 📓 Mapa técnico detallado del codebase: **[DOCS.md](DOCS.md)**.
 
@@ -16,24 +16,25 @@ Plataforma para **guardar, ver, editar, presentar y compartir archivos HTML** (r
 - **Cloudflare Workers** — sirve el frontend estático (`public/`) y una API JSON.
 - **D1** (SQLite) — metadatos: perfiles, documentos, visibilidad, `share_id`.
 - **R2** — contenido HTML de cada archivo (no va en D1 por el límite de 1 MB/fila).
-- Frontend en **JS vanilla** (módulos ES), sin framework ni build step. **Poppins** y **CodeMirror 5** servidos *self-host* (sin CDNs).
+- Frontend en **JS vanilla** (módulos ES), sin framework ni build step. **Inter**, **JetBrains Mono** y **CodeMirror 5** servidos *self-host* (sin CDNs).
 
 ## Funcionalidades
 
-- **Perfiles en el login** (2 pasos: token → elegir/crear perfil). El perfil activo se guarda por navegador y se puede cambiar desde la barra superior.
-- **Biblioteca con tabs**: *Mis archivos* (del perfil) y *Público* (todos los compartidos como públicos).
-- **Cards con thumbnail** (preview en vivo) y acciones solo-ícono: compartir, descargar, eliminar.
-- **Compartir estilo Drive**: modal con el link, botón copiar y toggle **Público/Privado**.
-- **Editor**: pestañas *Vista* (interactiva), *Editar texto* y *Código* (CodeMirror); el documento se muestra como una hoja delimitada.
-- **Edición enriquecida** en *Editar texto*: **barra de formato** (deshacer/rehacer, títulos, negrita/cursiva/subrayado, color, listas, alineación, enlaces) y **editor de bloques** — al hacer clic en un elemento aparece una mini-barra para moverlo ↑/↓, duplicarlo, ocultarlo, eliminarlo (con Ctrl/Cmd+Z para deshacer), cambiar tamaño de texto o color de fondo, y escalar la selección al contenedor. Todo opera sobre el DOM real: no rompe el HTML ni los scripts del reporte.
-- **Modo presentación**: pantalla completa con zoom (+/−), atajos de teclado (`+` `-` `0` `Esc`).
-- **Comentarios** por documento en el visor: barra lateral (ocultable con un toggle en la barra superior) que en pantallas angostas se apila debajo del documento. Cada comentario se puede **resolver** (pasa a un desplegable "Resueltos", con quién y cuándo; se puede **reabrir**) o **eliminar** (con confirmación); el encabezado muestra cuántos quedan abiertos.
+- **Navegación tipo Obsidian**: ribbon de íconos (explorador, biblioteca, subir, buscar, tema, perfil), **explorador** lateral con *Mis archivos* y *Públicos* (filtro y medidor de almacenamiento) y **panel** derecho del documento. En móvil, ambos laterales son cajones.
+- **Buscador rápido** con `⌘K` / `Ctrl+K` (documentos y acciones) y **subida por arrastre**: suelta un `.html` en cualquier parte.
+- **Perfiles en el login** (2 pasos: token → elegir/crear perfil). El perfil se cambia desde el avatar del ribbon.
+- **Biblioteca** con tabs *Mis archivos* / *Públicos* y tarjetas con **miniatura en vivo**, badges y acciones (compartir, descargar, eliminar).
+- **Compartir**: modal con el link, *Copiar link* y el switch **Documento público**; también desde el panel *Detalles*.
+- **Visor** con modos **Vista · Editar · Código**, título editable, estado de guardado real ("Cambios sin guardar" se apaga si deshaces todo), **Guardar** (`⌘S`) y **Descartar cambios**.
+- **Edición** en *Editar*: barra de formato (estilos de párrafo, negrita/cursiva/subrayado/tachado, color y resaltado, listas y sangría, alineación, enlaces, imágenes, quitar formato) y **editor de bloques** con acciones en pares: contenedor ↔ interior, mover ↑/↓, duplicar / insertar debajo, A−/A+, fondo, ocultar ↔ mostrar (con *Ocultos* para recuperarlos), eliminar con *Deshacer*; en tablas, operaciones de **fila y columna**. **Deshacer/rehacer** cubre todo (texto, formato y bloques). La ruta del bloque se ve abajo. Todo opera sobre el DOM real: no rompe el HTML ni los scripts del reporte.
+- **Modo presentación**: pantalla completa con zoom (+/−) y atajos (`+` `-` `0` `Esc`).
+- **Comentarios** en el panel: resolver/reabrir (desplegable *Resueltos*), eliminar con confirmación y `⌘↵` para enviar; el botón del panel muestra los abiertos.
 - **Failsafe de almacenamiento**: a 7 GB de uso en R2 se bloquean las subidas con un aviso, para no exceder el plan gratuito (10 GB).
 
 ## Diseño y temas
 
-- Identidad de **Reuse**: Foundation Purple `#151930`, Solid Purple `#37417f`, Re-Blue `#4b75f7`, Rising Lilac `#afb9ff` y verde de acento `#c6ffad`; tipografía **Poppins**.
-- **Selector de tema** (Sistema / Claro / Oscuro): la preferencia se guarda en `localStorage` y *Sistema* sigue `prefers-color-scheme`. Un script inline en cada `<head>` evita el parpadeo. Tokens en `public/app.css`.
+- Sistema de diseño **"Joaquin"**: lo que se presiona tiene relieve, donde se escribe está hundido, superficies casi negras con hairlines, un solo acento **naranja `#e8490c`** y brillo solo para lo activo. Tipografías **Inter** y **JetBrains Mono**; íconos **Lucide**.
+- **Selector de tema** (Sistema / Claro / Oscuro) en el ribbon: la preferencia se guarda en `localStorage` y *Sistema* sigue `prefers-color-scheme`. Un script inline en cada `<head>` evita el parpadeo. Tokens y componentes `ui-*` en `public/app.css` (detalle en [DOCS.md](DOCS.md) §11).
 
 ## Seguridad
 
@@ -41,7 +42,7 @@ Plataforma para **guardar, ver, editar, presentar y compartir archivos HTML** (r
 - El HTML subido **nunca se sanitiza** (se preserva tal cual), sino que se **aísla al renderizar**:
   - `/raw/:shareId` se sirve con `Content-Security-Policy: sandbox allow-scripts …` → **origen opaco**.
   - Vista, thumbnails y presentación usan `iframe sandbox="allow-scripts"` (sin `allow-same-origin`).
-  - **Editar texto** usa `allow-same-origin` **sin** `allow-scripts`: permite `designMode`, los `<script>` quedan **inertes** pero presentes (se conservan al guardar).
+  - **Editar** usa `allow-same-origin` **sin** `allow-scripts`: permite `designMode`, los `<script>` quedan **inertes** pero presentes (se conservan al guardar). La UI del editor vive fuera del documento y nunca se guarda dentro del HTML.
 - **Visibilidad**: un documento **privado** solo se abre con sesión (su link devuelve `403` sin autenticación); uno **público** es abierto a cualquiera con el link.
 
 ## Desarrollo local
@@ -92,15 +93,18 @@ src/
   util.js               Helpers (respuestas, ids, base64url)
 public/
   index.html / login.js     Login en 2 pasos (token → perfil)
-  library.html / library.js Biblioteca (tabs, subida, cards con thumbnail, switcher)
-  viewer.html / viewer.js   Visor/editor + Presentar + Compartir
+  library.html / library.js Biblioteca (tabs + galería)
+  viewer.html / viewer.js   Visor: Vista / Editar / Código + panel
+  editor.js                 Editor enriquecido (formato, bloques, historial)
+  comments.js               Comentarios del panel
+  shell.js                  Ribbon, explorador, panel, subida, buscador ⌘K
   shared.html / shared.js   Vista pública compartida (+ Presentar)
-  app.css                   Estilos + design tokens (tema claro/oscuro)
-  common.js                 Helpers, perfil activo, modales y modo presentación
-  theme.js                  Selector de tema
-  fonts/                    Poppins (self-host)
+  app.css                   Sistema de diseño (tokens + componentes ui-*) y layouts
+  common.js                 Helpers, modales, menús, toasts, compartir, presentación
+  icons.js · theme.js       Íconos Lucide · tema Sistema/Claro/Oscuro
+  favicon.svg               Favicon
+  fonts/                    Inter y JetBrains Mono (self-host)
   vendor/codemirror/        CodeMirror 5 (self-host)
-  *.png                     Logos de Reuse + favicon
 DOCS.md                     Mapa técnico detallado del codebase
 ```
 
@@ -125,8 +129,8 @@ DOCS.md                     Mapa técnico detallado del codebase
 
 ## Roadmap
 
-- [ ] Editor visual completo (no solo texto): barra de formato, imágenes, bloques.
 - [ ] Versionado/historial de ediciones.
-- [ ] Búsqueda y carpetas/etiquetas en la biblioteca.
+- [ ] Carpetas/etiquetas en la biblioteca y búsqueda dentro del contenido.
+- [ ] Edición asistida por IA sobre el documento.
 - [ ] Thumbnails pre-renderizados (server-side) para carga más rápida.
 - [ ] Subdominio dedicado para `/raw` (aislamiento de cookies).

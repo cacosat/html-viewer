@@ -3,50 +3,53 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Reuse · Biblioteca</title>
-  <link rel="icon" href="/icon.png">
-  <script>(function(){try{var p=localStorage.getItem('hv-theme')||'system';var d=p==='dark'||(p!=='light'&&matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.dataset.theme=d?'dark':'light';}catch(e){}})();</script>
+  <title>Biblioteca · Visor HTML</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <script>(function(){try{var s=localStorage,p=s.getItem('hv-theme')||'system',r=document.documentElement;var d=p==='dark'||(p!=='light'&&matchMedia('(prefers-color-scheme: dark)').matches);r.dataset.theme=d?'dark':'light';if(s.getItem('hv-left')==='closed')r.dataset.left='closed';}catch(e){}})();</script>
+  <link rel="preload" href="/fonts/inter-var.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/app.css">
 </head>
-<body>
-  <header class="topbar">
-    <a href="/library" class="brand-link" aria-label="Inicio">
-      <img class="brandmark logo-light" src="/logo-purple.png" alt="Reuse">
-      <img class="brandmark logo-dark" src="/logo-white.png" alt="Reuse">
-    </a>
-    <span class="sub">Visor</span>
-    <div class="spacer"></div>
-    <span id="theme-mount"></span>
-    <div id="profile-menu" class="profile-menu"></div>
-  </header>
+<body class="app-body">
+  <div class="shell" id="shell">
+    <nav class="ribbon" id="ribbon" aria-label="Navegación"></nav>
+    <aside class="explorer" id="explorer" aria-label="Explorador"></aside>
 
-  <main class="container">
-    <div id="storage-warn" class="banner" hidden></div>
+    <main class="workspace">
+      <header class="view-header">
+        <div class="vh-left">
+          <button type="button" class="ui-btn ui-btn-ghost ui-btn-icon vh-menu" data-shell="menu" aria-label="Abrir explorador"><i data-icon="menu"></i></button>
+          <nav class="crumbs-nav" aria-label="Ruta">
+            <span class="crumb">Biblioteca</span><span class="crumb-sep">/</span><span class="crumb-current" id="crumb-scope">Mis archivos</span>
+          </nav>
+        </div>
+        <div class="vh-center"></div>
+        <div class="vh-right">
+          <button type="button" class="ui-btn ui-btn-primary" data-act="upload"><i data-icon="upload"></i><span class="hide-xs">Subir HTML</span></button>
+        </div>
+      </header>
 
-    <section class="card">
-      <h2>Subir HTML</h2>
-      <form id="upload" class="upload-form">
-        <input type="file" id="file" accept=".html,.htm,text/html" required>
-        <input type="text" id="title" placeholder="Título (opcional)">
-        <select id="visibility" title="Visibilidad">
-          <option value="0">Privado</option>
-          <option value="1">Público</option>
-        </select>
-        <button type="submit">Subir</button>
-      </form>
-    </section>
-
-    <section>
-      <div class="tabs lib-tabs">
-        <button data-tab="mine" class="active">Mis archivos</button>
-        <button data-tab="public">Público</button>
+      <div class="view-body">
+        <div class="page">
+          <div class="page-head">
+            <div>
+              <span class="overline">Biblioteca</span>
+              <h1 id="lib-title">Mis archivos</h1>
+              <p class="small muted" id="lib-desc">&nbsp;</p>
+            </div>
+          </div>
+          <div class="ui-tabs lib-tabs" role="tablist" aria-label="Alcance">
+            <button type="button" class="ui-tab" role="tab" data-scope="mine" aria-selected="true">Mis archivos <span class="ui-badge ui-badge-count" id="count-mine"></span></button>
+            <button type="button" class="ui-tab" role="tab" data-scope="public" aria-selected="false">Públicos <span class="ui-badge ui-badge-count" id="count-public"></span></button>
+          </div>
+          <div id="storage-callout" class="callout lib-callout" hidden></div>
+          <div id="docs" class="doc-grid" aria-live="polite"></div>
+          <div id="empty" hidden></div>
+        </div>
       </div>
-      <div id="docs" class="docs"></div>
-      <p id="empty" class="muted" hidden></p>
-    </section>
-  </main>
+    </main>
 
-  <script type="module" src="/theme.js"></script>
+    <div class="drawer-scrim" data-shell="scrim"></div>
+  </div>
   <script type="module" src="/library.js"></script>
 </body>
 </html>

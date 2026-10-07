@@ -3,26 +3,25 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Documento compartido · Reuse</title>
-  <link rel="icon" href="/icon.png">
+  <title>Documento compartido · Visor HTML</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <script>(function(){try{var p=localStorage.getItem('hv-theme')||'system';var d=p==='dark'||(p!=='light'&&matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.dataset.theme=d?'dark':'light';}catch(e){}})();</script>
+  <link rel="preload" href="/fonts/inter-var.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/app.css">
 </head>
-<body class="viewer-body">
-  <header class="topbar share">
-    <a href="/" class="brand-link" aria-label="Ir al inicio de Reuse">
-      <img class="brandmark logo-light" src="/logo-purple.png" alt="Reuse">
-      <img class="brandmark logo-dark" src="/logo-white.png" alt="Reuse">
-    </a>
-    <span id="title" style="font-weight:600">Documento</span>
-    <div class="spacer"></div>
+<body class="share-page">
+  <header class="view-header share-header">
+    <a href="/" class="wordmark" title="Ir a Visor HTML">Visor HTML</a>
+    <span class="crumb-sep" aria-hidden="true">/</span>
+    <span class="share-title" id="title">Documento</span>
+    <span class="spacer"></span>
     <span id="theme-mount"></span>
-    <button id="present" class="ghost">Presentar</button>
-    <a id="download" class="ghost">Descargar HTML</a>
+    <a id="download" class="ui-btn ui-btn-ghost" hidden><i data-icon="download"></i><span class="hide-xs">Descargar</span></a>
+    <button type="button" id="present" class="ui-btn" hidden><i data-icon="presentation"></i><span class="hide-xs">Presentar</span></button>
   </header>
-  <main class="viewer-main">
+  <main class="share-main" id="main">
     <div class="stage">
-      <iframe id="frame" sandbox="allow-scripts allow-forms allow-popups allow-modals allow-downloads"></iframe>
+      <iframe class="sheet" id="frame" title="Documento compartido" sandbox="allow-scripts allow-forms allow-popups allow-modals allow-downloads"></iframe>
     </div>
   </main>
   <script type="module" src="/theme.js"></script>

@@ -3,34 +3,53 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Reuse · Visor HTML</title>
-  <link rel="icon" href="/icon.png">
+  <title>Iniciar sesión · Visor HTML</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <script>(function(){try{var p=localStorage.getItem('hv-theme')||'system';var d=p==='dark'||(p!=='light'&&matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.dataset.theme=d?'dark':'light';}catch(e){}})();</script>
+  <link rel="preload" href="/fonts/inter-var.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/app.css">
 </head>
-<body class="center">
-  <div class="theme-corner"><span id="theme-mount"></span></div>
-  <div class="card auth">
-    <img class="brandmark logo-light" src="/logo-purple.png" alt="Reuse">
-    <img class="brandmark logo-dark" src="/logo-white.png" alt="Reuse">
+<body class="auth-page">
+  <div class="auth-corner"><span id="theme-mount"></span></div>
+  <main class="auth-wrap">
+    <div class="auth-brand">
+      <span class="wordmark">Visor HTML</span>
+      <span class="small muted">Guarda, edita y comparte reportes HTML.</span>
+    </div>
 
-    <!-- Paso 1: token -->
-    <form id="step-token">
-      <p class="muted">Visor de archivos HTML. Ingresa el token de acceso.</p>
-      <input type="password" id="token" placeholder="Token de acceso" autocomplete="current-password" required>
-      <button type="submit">Continuar</button>
-      <p id="err-token" class="error" hidden></p>
-    </form>
+    <div class="ui-card auth-card">
+      <!-- Paso 1: token -->
+      <form id="step-token" class="auth-step" novalidate>
+        <div class="auth-step-head">
+          <div class="auth-steps" aria-hidden="true"><span class="is-on"></span><span></span></div>
+          <h1 class="h3">Iniciar sesión</h1>
+          <p class="small muted">Ingresa el token de acceso compartido del equipo.</p>
+        </div>
+        <div class="ui-field">
+          <label class="ui-label" for="token">Token de acceso</label>
+          <input class="ui-input" type="password" id="token" autocomplete="current-password" aria-describedby="err-token" required>
+          <p id="err-token" class="ui-help is-error" hidden></p>
+        </div>
+        <button type="submit" class="ui-btn ui-btn-primary ui-btn-block">Continuar</button>
+      </form>
 
-    <!-- Paso 2: perfil -->
-    <form id="step-profile" hidden>
-      <p class="muted">¿Con qué perfil entras?</p>
-      <select id="profile-select"></select>
-      <button type="button" id="new-profile" class="ghost">+ Crear perfil nuevo</button>
-      <button type="submit">Entrar</button>
-      <p id="err-profile" class="error" hidden></p>
-    </form>
-  </div>
+      <!-- Paso 2: perfil -->
+      <form id="step-profile" class="auth-step" hidden novalidate>
+        <div class="auth-step-head">
+          <div class="auth-steps" aria-hidden="true"><span class="is-on"></span><span class="is-on"></span></div>
+          <h1 class="h3">Elige tu perfil</h1>
+          <p class="small muted">Tu perfil firma los documentos que subes y tus comentarios.</p>
+        </div>
+        <div class="ui-field">
+          <label class="ui-label" for="profile-select">Perfil</label>
+          <div class="ui-select is-block"><select id="profile-select" aria-describedby="err-profile"></select></div>
+          <p id="err-profile" class="ui-help is-error" hidden></p>
+        </div>
+        <button type="button" id="new-profile" class="ui-btn ui-btn-block">Crear perfil nuevo</button>
+        <button type="submit" class="ui-btn ui-btn-primary ui-btn-block">Entrar</button>
+      </form>
+    </div>
+  </main>
   <script type="module" src="/theme.js"></script>
   <script type="module" src="/login.js"></script>
 </body>

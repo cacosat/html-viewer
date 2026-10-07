@@ -3,107 +3,94 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Reuse · Documento</title>
-  <link rel="icon" href="/icon.png">
-  <script>(function(){try{var p=localStorage.getItem('hv-theme')||'system';var d=p==='dark'||(p!=='light'&&matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.dataset.theme=d?'dark':'light';}catch(e){}})();</script>
+  <title>Documento · Visor HTML</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <script>(function(){try{var s=localStorage,p=s.getItem('hv-theme')||'system',r=document.documentElement;var d=p==='dark'||(p!=='light'&&matchMedia('(prefers-color-scheme: dark)').matches);r.dataset.theme=d?'dark':'light';if(s.getItem('hv-left')==='closed')r.dataset.left='closed';var rp=s.getItem('hv-right');if(rp==='closed'||(rp===null&&innerWidth<1440))r.dataset.right='closed';}catch(e){}})();</script>
+  <link rel="preload" href="/fonts/inter-var.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/app.css">
 </head>
-<body class="viewer-body">
-  <header class="topbar">
-    <a href="/library" class="ghost">← Biblioteca</a>
-    <input id="title" class="title-input" placeholder="Título" title="Editar título">
-    <div class="spacer"></div>
-    <div class="tabs">
-      <button data-tab="view" class="active">Vista</button>
-      <button data-tab="text">Editar texto</button>
-      <button data-tab="code">Código</button>
-    </div>
-    <div class="spacer"></div>
-    <span id="theme-mount"></span>
-    <button id="toggle-comments" class="ghost icon-only" title="Mostrar/ocultar comentarios" aria-label="Comentarios"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></button>
-    <button id="present" class="ghost">Presentar</button>
-    <button id="copy" class="ghost">Compartir</button>
-    <button id="save" disabled>Guardar</button>
-  </header>
-  <main class="viewer-main has-comments">
-    <div class="doc-area">
-      <!-- Barra de formato: visible solo en "Editar texto". Vive fuera del iframe,
-           así nada de esta UI termina dentro del HTML guardado. -->
-      <div class="format-bar" id="formatBar" hidden>
-        <button class="fbtn" data-cmd="undo" title="Deshacer (Ctrl/Cmd+Z)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg></button>
-        <button class="fbtn" data-cmd="redo" title="Rehacer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 14 20 9 15 4"/><path d="M4 20v-7a4 4 0 0 1 4-4h12"/></svg></button>
-        <span class="fsep"></span>
-        <select class="fselect" id="blockFormat" title="Formato de bloque">
-          <option value="">Estilo</option>
-          <option value="p">Párrafo</option>
-          <option value="h1">Título 1</option>
-          <option value="h2">Título 2</option>
-          <option value="h3">Título 3</option>
-        </select>
-        <span class="fsep"></span>
-        <button class="fbtn" data-cmd="bold" title="Negrita (Ctrl/Cmd+B)"><span class="fglyph" style="font-weight:700">B</span></button>
-        <button class="fbtn" data-cmd="italic" title="Cursiva (Ctrl/Cmd+I)"><span class="fglyph" style="font-style:italic">I</span></button>
-        <button class="fbtn" data-cmd="underline" title="Subrayado (Ctrl/Cmd+U)"><span class="fglyph" style="text-decoration:underline">U</span></button>
-        <button class="fbtn" data-cmd="strikeThrough" title="Tachado"><span class="fglyph" style="text-decoration:line-through">S</span></button>
-        <label class="fbtn fcolor" title="Color de texto"><span class="fglyph" id="foreSwatch" style="border-bottom:3px solid #4b75f7">A</span><input type="color" id="foreColor" value="#4b75f7"></label>
-        <span class="fsep"></span>
-        <button class="fbtn" data-cmd="insertUnorderedList" title="Lista"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></button>
-        <button class="fbtn" data-cmd="insertOrderedList" title="Lista numerada"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><text x="1" y="8" font-size="8" fill="currentColor" stroke="none">1</text><text x="1" y="15" font-size="8" fill="currentColor" stroke="none">2</text><text x="1" y="22" font-size="8" fill="currentColor" stroke="none">3</text><line x1="9" y1="6" x2="21" y2="6"/><line x1="9" y1="13" x2="21" y2="13"/><line x1="9" y1="20" x2="21" y2="20"/></svg></button>
-        <span class="fsep"></span>
-        <button class="fbtn" data-cmd="justifyLeft" title="Alinear a la izquierda"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="15" y2="12"/><line x1="3" y1="18" x2="18" y2="18"/></svg></button>
-        <button class="fbtn" data-cmd="justifyCenter" title="Centrar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="6" y1="12" x2="18" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg></button>
-        <button class="fbtn" data-cmd="justifyRight" title="Alinear a la derecha"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="9" y1="12" x2="21" y2="12"/><line x1="6" y1="18" x2="21" y2="18"/></svg></button>
-        <span class="fsep"></span>
-        <button class="fbtn" id="linkBtn" title="Insertar enlace"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5"/></svg></button>
-        <button class="fbtn" data-cmd="unlink" title="Quitar enlace"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5"/><line x1="2" y1="2" x2="22" y2="22"/></svg></button>
-        <button class="fbtn" data-cmd="removeFormat" title="Limpiar formato"><span class="fglyph"><s>T</s>ₓ</span></button>
-      </div>
+<body class="app-body">
+  <div class="shell has-panel" id="shell">
+    <nav class="ribbon" id="ribbon" aria-label="Navegación"></nav>
+    <aside class="explorer" id="explorer" aria-label="Explorador"></aside>
 
-      <!-- Vista interactiva -->
-      <div class="stage" id="viewStage">
-        <iframe id="viewFrame" sandbox="allow-scripts allow-forms allow-popups allow-modals allow-downloads"></iframe>
-      </div>
-      <!-- Editar texto (designMode, scripts inertes) -->
-      <div class="stage" id="editStage" hidden>
-        <iframe id="editFrame" sandbox="allow-same-origin"></iframe>
-      </div>
-      <!-- Código (CodeMirror) -->
-      <div class="pane" id="codePane" hidden>
-        <textarea id="code" spellcheck="false"></textarea>
-      </div>
-
-      <!-- Overlays del editor de bloques: resaltado + mini-barra del bloque activo.
-           Son hermanos del iframe (no hijos del documento) => jamás se guardan. -->
-      <div class="edit-overlays" id="editOverlays" hidden>
-        <div class="block-outline" id="blockOutline" hidden></div>
-        <div class="block-bar" id="blockBar" hidden>
-          <span class="block-tag" id="blockTag">p</span>
-          <button class="bbtn" data-act="parent" title="Seleccionar contenedor"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 11 12 6 7 11"/><polyline points="17 18 12 13 7 18"/></svg></button>
-          <span class="fsep"></span>
-          <button class="bbtn" data-act="up" title="Mover arriba"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></button>
-          <button class="bbtn" data-act="down" title="Mover abajo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg></button>
-          <button class="bbtn" data-act="dup" title="Duplicar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
-          <span class="fsep"></span>
-          <button class="bbtn" data-act="smaller" title="Texto más chico"><span class="fglyph" style="font-size:.68rem">A−</span></button>
-          <button class="bbtn" data-act="bigger" title="Texto más grande"><span class="fglyph">A+</span></button>
-          <label class="bbtn bswatch" title="Color de fondo del bloque"><span class="swatch" id="bgSwatch"></span><input type="color" id="blockBg" value="#c6ffad"></label>
-          <button class="bbtn" data-act="resetStyle" title="Restablecer estilos del bloque"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg></button>
-          <span class="fsep"></span>
-          <button class="bbtn" data-act="hide" title="Ocultar bloque (recuperable desde Código)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg></button>
-          <button class="bbtn danger" data-act="del" title="Eliminar bloque (Ctrl/Cmd+Z deshace)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>
+    <main class="workspace">
+      <header class="view-header">
+        <div class="vh-left">
+          <button type="button" class="ui-btn ui-btn-ghost ui-btn-icon vh-menu" data-shell="menu" aria-label="Abrir explorador"><i data-icon="menu"></i></button>
+          <nav class="crumbs-nav" aria-label="Ruta">
+            <a class="crumb cq-hide-sm" id="crumb-scope" href="/library">Mis archivos</a>
+            <span class="crumb-sep cq-hide-sm">/</span>
+            <input id="title" class="title-input" aria-label="Título del documento" placeholder="Sin título" spellcheck="false" autocomplete="off">
+          </nav>
+          <span class="save-state" id="save-state" role="status" hidden><span class="save-text cq-hide-lg"></span></span>
         </div>
+        <div class="vh-center">
+          <div class="ui-segmented" id="modes" role="tablist" aria-label="Modo">
+            <button type="button" class="ui-segment" role="tab" data-mode="view" aria-selected="true" title="Vista: el documento tal cual, con sus scripts"><i data-icon="eye" data-size="14"></i><span class="seg-label cq-hide-sm">Vista</span></button>
+            <button type="button" class="ui-segment" role="tab" data-mode="edit" aria-selected="false" title="Editar: texto, formato y bloques"><i data-icon="pencil" data-size="14"></i><span class="seg-label cq-hide-sm">Editar</span></button>
+            <button type="button" class="ui-segment" role="tab" data-mode="code" aria-selected="false" title="Código: el HTML fuente"><i data-icon="code" data-size="14"></i><span class="seg-label cq-hide-sm">Código</span></button>
+          </div>
+        </div>
+        <div class="vh-right">
+          <button type="button" class="ui-btn ui-btn-ghost cq-square-md" id="discard" title="Descartar los cambios sin guardar" hidden><i data-icon="rotate-ccw"></i><span class="cq-hide-md">Descartar</span></button>
+          <button type="button" class="ui-btn ui-btn-ghost ui-btn-icon hide-xs" id="present" aria-label="Presentar" title="Presentar en pantalla completa"><i data-icon="presentation"></i></button>
+          <button type="button" class="ui-btn cq-square-md" id="share" title="Compartir" aria-label="Compartir"><i data-icon="share"></i><span class="cq-hide-md">Compartir</span></button>
+          <button type="button" class="ui-btn ui-btn-primary" id="save" disabled>Guardar</button>
+          <button type="button" class="ui-btn ui-btn-ghost" id="toggle-panel" aria-label="Comentarios y detalles" aria-controls="panel"><i data-icon="panel-right"></i><span class="ui-badge ui-badge-count" id="panel-count" hidden></span></button>
+        </div>
+      </header>
+
+      <div class="doc-area" id="docArea">
+        <!-- Barra de formato (solo en Editar). Vive fuera del iframe: nada de esto se guarda. -->
+        <div class="format-bar" id="formatBar" role="toolbar" aria-label="Formato de texto" hidden></div>
+        <div class="stage-wrap">
+          <div class="stage" id="viewStage">
+            <iframe class="sheet" id="viewFrame" title="Documento" sandbox="allow-scripts allow-forms allow-popups allow-modals allow-downloads"></iframe>
+          </div>
+          <div class="stage" id="editStage" hidden>
+            <iframe class="sheet" id="editFrame" title="Documento en edición" sandbox="allow-same-origin"></iframe>
+          </div>
+          <div class="code-pane" id="codePane" hidden>
+            <textarea id="code" spellcheck="false" aria-label="Código HTML"></textarea>
+          </div>
+          <!-- Editor de bloques: contorno + mini-barra del bloque activo (overlays del padre). -->
+          <div class="edit-overlays" id="editOverlays" hidden>
+            <div class="block-outline" id="blockOutline" hidden></div>
+            <div class="block-bar" id="blockBar" role="toolbar" aria-label="Bloque seleccionado" hidden></div>
+          </div>
+        </div>
+        <div class="edit-status" id="editStatus" hidden></div>
       </div>
-    </div>
-    <aside class="comments" id="comments">
-      <div class="comments-head">Comentarios <span class="comments-count" id="comments-count" title="Comentarios abiertos" hidden></span></div>
-      <div class="comments-list" id="comments-list"></div>
-      <form class="comments-form" id="comments-form">
-        <textarea id="comment-body" placeholder="Escribe un comentario…" rows="2"></textarea>
-        <button type="submit">Comentar</button>
-      </form>
+    </main>
+
+    <aside class="panel" id="panel" aria-label="Panel del documento">
+      <div class="panel-inner">
+        <div class="panel-tabs ui-tabs" role="tablist" aria-label="Panel">
+          <button type="button" class="ui-tab" role="tab" id="tab-comments" data-ptab="comments" aria-controls="ptab-comments" aria-selected="true">Comentarios <span class="ui-badge ui-badge-count" id="comments-count" hidden></span></button>
+          <button type="button" class="ui-tab" role="tab" id="tab-details" data-ptab="details" aria-controls="ptab-details" aria-selected="false">Detalles</button>
+          <span class="spacer"></span>
+          <button type="button" class="ui-btn ui-btn-ghost ui-btn-sm ui-btn-icon panel-close" id="panel-close" aria-label="Cerrar panel" title="Cerrar panel"><i data-icon="x"></i></button>
+        </div>
+        <section class="panel-body" id="ptab-comments" role="tabpanel" aria-labelledby="tab-comments">
+          <div class="comments-list" id="comments-list"></div>
+          <form class="composer" id="comments-form">
+            <label class="visually-hidden" for="comment-body">Nuevo comentario</label>
+            <textarea class="ui-input" id="comment-body" placeholder="Escribe un comentario" rows="3"></textarea>
+            <div class="composer-row">
+              <span class="caption subtle" id="composer-hint"></span>
+              <button type="submit" class="ui-btn ui-btn-sm">Comentar</button>
+            </div>
+          </form>
+        </section>
+        <section class="panel-body" id="ptab-details" role="tabpanel" aria-labelledby="tab-details" hidden>
+          <div class="details" id="details"></div>
+        </section>
+      </div>
     </aside>
-  </main>
-  <script type="module" src="/theme.js"></script>
+
+    <div class="drawer-scrim" data-shell="scrim"></div>
+  </div>
   <script type="module" src="/viewer.js"></script>
 </body>
 </html>

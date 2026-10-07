@@ -12,7 +12,7 @@ Documentación de referencia del codebase: arquitectura, ruteo, backend función
 
 1. Elegir/crear un **perfil** (nombre, correo, área) al iniciar sesión.
 2. Subir archivos `.html` a una **biblioteca**, marcándolos **públicos o privados**.
-3. Verlos renderizados, **editar su texto** (estilo Gmail) o su **código** (con resaltado), y **presentarlos** a pantalla completa.
+3. Verlos renderizados, **editarlos** (texto, formato, bloques, tablas e imágenes, con deshacer/rehacer completo) o editar su **código** (con resaltado), y **presentarlos** a pantalla completa.
 4. Generar un **link por archivo** para compartir: público (abierto a cualquiera) o privado (exige sesión).
 
 El valor: cualquiera puede ver un reporte HTML por un link, sin saber qué es un HTML ni cómo abrirlo.
@@ -45,7 +45,7 @@ flowchart LR
 | Frontend | HTML + CSS + JS vanilla (módulos ES) | Sin framework ni build step |
 | CLI/deploy | Wrangler 4.x | `wrangler dev` (local con D1/R2 emulados) y `wrangler deploy` |
 
-Sin paso de compilación: Wrangler empaqueta `src/index.js` directamente. El frontend no usa CDNs: **Poppins** y **CodeMirror 5** se sirven self-host desde `public/fonts/` y `public/vendor/`.
+Sin paso de compilación: Wrangler empaqueta `src/index.js` directamente. El frontend no usa CDNs: **Inter**, **JetBrains Mono** y **CodeMirror 5** se sirven self-host desde `public/fonts/` y `public/vendor/`. La interfaz sigue el sistema de diseño **"Joaquin"** (ver §11).
 
 ---
 
@@ -66,14 +66,19 @@ src/
   util.js                 Helpers: respuestas JSON, ids, base64url
 public/
   index.html / login.js     Login en 2 pasos (token → perfil)
-  library.html / library.js Biblioteca: tabs, subida, cards con thumbnail, switcher de perfil
-  viewer.html / viewer.js   Visor/editor (Vista / Texto / Código) + Presentar + Compartir
-  shared.html / shared.js   Vista pública compartida (+ Presentar; bloquea privados)
-  app.css                   Estilos + design tokens (tema claro/oscuro)
-  common.js                 Helpers + perfil activo + modales (crear perfil, compartir) + modo presentación
-  theme.js                  Selector de tema (Sistema/Claro/Oscuro)
-  fonts/poppins-*.woff2     Tipografía Poppins self-host (subset latin)
-  logo-*.png · icon.png     Logos oficiales de Reuse (swap por tema) + favicon
+  library.html / library.js Biblioteca: tabs Mis archivos/Públicos + galería de tarjetas
+  viewer.html / viewer.js   Visor: Vista / Editar / Código, guardado, panel (comentarios + detalles)
+  editor.js                 Editor enriquecido del modo Editar (formato, bloques, historial)
+  comments.js               Comentarios del panel (resolver/reabrir/eliminar)
+  shell.js                  Shell: ribbon + explorador + panel, subida, buscador ⌘K, cajones
+  shared.html / shared.js   Vista pública compartida (+ Presentar; estados privado/no encontrado)
+  app.css                   Sistema de diseño (tokens oscuro/claro, componentes ui-*) + layouts
+  common.js                 Helpers, perfil/preferencias, modal/confirmación/menú/popover/toast,
+                            compartir y modo presentación
+  icons.js                  Íconos Lucide inline (icon(), hydrateIcons())
+  theme.js                  Tema Sistema/Claro/Oscuro (menú del ribbon y botón #theme-mount)
+  favicon.svg               Favicon (acento + </>; el sistema no define logo)
+  fonts/                    Inter y JetBrains Mono variables, self-host (subset latin)
   vendor/codemirror/        CodeMirror 5 self-host (core + modos)
 ```
 
@@ -187,7 +192,7 @@ Todas las consultas usan **prepared statements con `bind`** (sin inyección SQL)
 
 - Un solo `AUTH_TOKEN` (secreto) → cookie firmada de 30 días. El token gatea toda la API.
 - El **perfil activo** NO es seguridad: es una preferencia por navegador (`localStorage` `hv-profile`). Se elige al iniciar sesión y filtra la vista "Mis archivos". Como hay un único token, todo el contenido es accesible para esa sesión; el perfil es atribución/vista.
-- En el cliente, `common.js → api()` redirige a `/` ante un 401 (excepto en `/` y `/s/...`).
+- En el cliente, `common.js → api()` redirige a `/` ante un 401 (excepto en `/` y `/s/...`). Las páginas del shell redirigen al login si no hay perfil activo.
 
 ---
 
@@ -198,7 +203,7 @@ El HTML subido es contenido potencialmente activo. **No se sanitiza**; se **aís
 | Contexto | `sandbox` | Origen | Scripts |
 |---|---|---|---|
 | Vista pública (`/raw`), Vista del visor, thumbnails, modo presentación | `allow-scripts` (sin `allow-same-origin`) + `/raw` manda `CSP: sandbox` | Opaco | Corren, aislados |
-| Editar texto (`#editFrame`) | `allow-same-origin` (**sin** `allow-scripts`) | Mismo origen | **Inertes** pero presentes en el DOM (se conservan al guardar) |
+| Editar (`#editFrame`) | `allow-same-origin` (**sin** `allow-scripts`) | Mismo origen | **Inertes** pero presentes en el DOM (se conservan al guardar) |
 
 **Visibilidad:** un doc **privado** solo se sirve por `/raw` y `/api/shared` con sesión válida (403 si no). Un doc **público** es abierto a cualquiera con el link.
 
@@ -209,43 +214,60 @@ El HTML subido es contenido potencialmente activo. **No se sanitiza**; se **aís
 ## 11. Cómo está construido el UI
 
 ### 11.1 Filosofía
-- **Estático + JS vanilla con módulos ES.** Cada página importa helpers de `/common.js` e incluye `/theme.js`. Sin framework ni bundler; la única librería de terceros es **CodeMirror 5** (vendored, carga diferida solo en el editor de código).
-- **Una hoja de estilos** (`app.css`) con design tokens claro/oscuro.
+- **Estático + JS vanilla con módulos ES**, sin framework ni bundler. La única librería de terceros es **CodeMirror 5** (vendored, carga diferida solo en el modo Código).
+- **Sistema de diseño "Joaquin"** (DESIGN.md provisto por el usuario): lo que se presiona tiene **relieve** (gradiente + bisel), donde se escribe está **hundido** (pozo), la estructura es plana; superficies casi negras con hairlines, **un solo acento** naranja (`#e8490c`) y **brillo solo para lo activo** (seleccionado, encendido, con foco). Tema **oscuro por defecto** y un tema claro completo con los mismos tokens.
+- Íconos **Lucide** inline (trazo 1.5, `currentColor`) desde `icons.js`. Sin logo: el nombre **"Visor HTML"** en Inter 600.
+- **Voz**: oraciones con mayúscula inicial, botones con verbo (+ sustantivo), confirmaciones como pregunta con el verbo repetido en el botón ("¿Eliminar este documento?" → *Eliminar documento* / *Conservar documento*), errores que dicen cómo corregir, sin emoji ni signos de exclamación.
 
-### 11.2 Assets y temas
-Rutas **absolutas** (`/app.css`, etc.) para funcionar bajo URLs con segmento dinámico. Favicon `/icon.png` (isotipo). Cada `<head>` corre un **script inline anti-flash** que fija `data-theme` antes del primer pintado. `theme.js` gestiona el selector (Sistema/Claro/Oscuro, persistido en `localStorage`).
+### 11.2 Tokens y componentes (`app.css`)
+Orden del archivo: fuentes → tokens (`:root` = oscuro; `:root[data-theme="light"]` = claro) → base → componentes `ui-*` → shell → páginas → responsive.
+- **Tokens**: superficies (`--bg-well`, `--bg`, `--surface`, `--surface-raised`, `--surface-overlay`, `--scrim`), tinta (`--ink-strong`, `--ink`, `--ink-muted`, `--ink-subtle`), líneas (`--line`, `--line-strong`, `--line-control`), controles (`--control-top/bottom/edge`, `--knob-*`), acento (`--accent` para marcas, `--accent-text` para texto, `--accent-top/bottom/edge` para rellenos, `--accent-soft/tint`), estados y categorías (success/danger/warning/info/teal/violet/amber, cada uno en trío sólido/texto/tinte), sombras (`--bevel-raised/accent/pressed/knob`, `--well`, `--elev-card/float/modal`, `--glow-*`, `--focus-ring`, `--focus-halo`, `--halo-danger`), radios (4/6/8/12/16), espaciado en base 4 px y movimiento (`--duration-*`, `--ease-*`; se anula con `prefers-reduced-motion`).
+- **Tipografía**: **Inter** variable (con `cv01` y `ss03`) para todo y **JetBrains Mono** para código, fechas, tamaños y atajos. Ambas self-host en `public/fonts/` (subset latin).
+- **Componentes**: `ui-btn` (`-primary` único por vista, `-ghost`, `-danger`, `-sm`, `-lg`, `-icon`, `-block`; presionado = gradiente invertido + bisel hundido + 1 px abajo), `ui-input`/`ui-field`/`ui-label`/`ui-help` (foco: borde de acento + halo; error: `aria-invalid` + texto), `ui-select`, `ui-switch`, `ui-segmented`/`ui-segment` (el activo sale en relieve con punto de acento), `ui-card` (+ `-interactive`), `ui-badge` (variantes por tono, `-dot`, `-count`), `ui-tabs`/`ui-tab`, `ui-progress`, `ui-scrim`/`ui-modal` (pie hundido con las acciones, la que confirma al final). Lo que el sistema no define (menús, popovers, toasts, callouts, estados vacíos) usa la opción más sobria: superficie elevada + hairline, sin brillo.
+- `[hidden] { display: none !important }` global: ningún `display:flex` vuelve a mostrar algo oculto.
 
-### 11.3 Tokens (`app.css`)
-Claro en `:root`, oscuro en `:root[data-theme="dark"]` (oscuro = Foundation Purple `#151930`; primario Solid Purple `#37417f` en claro, Re-Blue `#4b75f7` en oscuro; lila, verde de acento). También define los colores de sintaxis de CodeMirror (`--cm-*`) por tema. Tipografía **Poppins**.
+### 11.3 Shell (navegación tipo Obsidian)
+`shell.js` arma, en biblioteca y visor, una grilla de 4 columnas:
+1. **Ribbon** (48 px): mostrar/ocultar el explorador (`⌘\`), Biblioteca, Subir HTML y Buscar (`⌘K`); abajo, tema y avatar (menú de perfil: cambiar, crear, cerrar sesión). La página actual lleva una barra de acento con brillo.
+2. **Explorador** (264 px, colapsable; preferencia `hv-left`): nombre de la app, filtro por título, dos carpetas colapsables —*Mis archivos* y *Públicos*— con el documento abierto resaltado, y medidor de almacenamiento (barra + badge de aviso cerca/al límite).
+3. **Área de trabajo**: `view-header` (48 px) + contenido. El header compacta etiquetas según **su propio ancho** con *container queries* (`cq-hide-lg/md/sm`, `cq-square-md`), no según el viewport.
+4. **Panel** (320 px, solo visor; preferencia `hv-right`, cerrado por defecto bajo 1440 px de ancho).
+- **Subir HTML**: modal con zona de arrastre, título y switch *Documento público*; se abre desde el ribbon, el explorador, el header de la biblioteca o **soltando un .html en cualquier parte** (overlay de arrastre). Al terminar abre el documento nuevo.
+- **Buscador rápido** (`⌘K`): documentos (míos + públicos, búsqueda por palabras sin acentos) y acciones; ↑/↓ + Enter.
+- Datos compartidos: `loadDocs(scope)` cachea las listas que usan explorador y biblioteca; los eventos `hv:docs-changed` / `hv:doc-changed` invalidan y refrescan.
+- **≤ 860 px**: ribbon + explorador y panel pasan a ser **cajones** con scrim (botón ☰ en el header). **≤ 560 px**: el header del visor se divide en dos filas (acciones arriba, selector de modo a ancho completo abajo).
 
-### 11.4 Helpers (`common.js`)
-- `api`, `fmtDate`, `fmtSize`, `escapeHtml`, `toast`.
-- Perfil activo: `getProfile` / `setProfile` / `clearProfile` (`localStorage`).
-- `openModal(build)` — overlay + diálogo (cierra con click fuera / Esc).
-- `createProfileModal(onCreated)` — modal con nombre/correo/área → `POST /api/profiles`.
-- `shareModal(doc)` — modal estilo Drive: link, copiar, y **toggle público/privado** (`PUT … {public}`); emite `hv:doc-changed`.
-- `presentMode({srcdoc|src})` — **modo presentación** (ver §11.6).
+### 11.4 Módulos del frontend
+- `common.js`: `api`, `errorMessage`, formatos (`fmtDate`, `fmtShortDate`, `fmtSize`), `escapeHtml`, `initials`, atajos (`isMac`, `MOD`, `kbd`, `shortcut`), perfil activo y preferencias (`pref`/`setPref`), **toasts** con acción opcional (p. ej. *Deshacer*), `openModal` (foco atrapado, Esc, clic fuera), `confirmDialog`, `promptDialog` (con validación), `openMenu`/`openPopover` (se ubican sin salirse del viewport, teclado ↑/↓/Esc, ítems deshabilitables), `createProfileModal`, `setVisibility`/`shareUrl`/`copyText`, `shareModal` y `presentMode`.
+- `icons.js`: `icon(nombre, tamaño)` y `hydrateIcons()` (reemplaza `<i data-icon>` del HTML estático).
+- `theme.js`: preferencia Sistema/Claro/Oscuro (`hv-theme`), `openThemeMenu`, `bindThemeButton`; monta un botón en `#theme-mount` (login y página compartida). Cada `<head>` tiene un script inline que fija `data-theme` (y `data-left`/`data-right` en el shell) antes del primer pintado.
+- `shell.js`: shell, subida, buscador rápido, cajones y atajos globales. `editor.js`: §11.6. `comments.js`: comentarios del panel.
 
 ### 11.5 Páginas
-- **`index.html` + `login.js`** — Login en **2 pasos**: (1) token → `POST /auth/login`; (2) dropdown de perfiles + "Crear perfil" (modal). Al elegir, guarda el perfil en `localStorage` y va a `/library`. Si ya hay sesión y perfil, salta directo.
-- **`library.html` + `library.js`** — Topbar con logo, selector de tema y **menú de perfil** (avatar + nombre; switch de perfil / crear / salir). Sección de subida (archivo, título, **visibilidad pública/privada**) con el banner del failsafe. **Tabs**: *Mis archivos* (`?profile_id=`) y *Público* (`?scope=public`). Cada doc es una **card** con **thumbnail** (iframe a `/raw` escalado, lazy con `IntersectionObserver`), badges (perfil, Público/Privado) y **acciones solo-ícono** (compartir → `shareModal`, descargar, eliminar). El título/thumbnail abren `/doc/:id`.
-- **`viewer.html` + `viewer.js`** — Topbar: volver, título editable, **3 pestañas**, selector de tema, **Presentar**, **Compartir** (`shareModal`), Guardar. Superficies en **hoja delimitada** (`.stage`): Vista (`#viewFrame`, interactiva), Editar texto (`#editFrame`, `designMode`, con anillo, **barra de formato** y **editor de bloques** — ver §11.6), Código (`#codePane` con CodeMirror, carga diferida). `content` es la fuente de verdad (se sincroniza desde la superficie visible). Guarda con `PUT`; `beforeunload` avisa cambios sin guardar. La hoja usa `max-width: 1300px` (márgenes laterales chicos). A la derecha hay una **barra de comentarios** (`.comments`) con la lista + caja para agregar (autor = perfil activo); se **oculta/muestra** con un toggle en la topbar (preferencia en `localStorage` `hv-comments`) y en pantallas angostas se apila debajo del documento. Cada comentario tiene acciones **Resolver** (✓) y **Eliminar** (🗑, con `confirm`); los resueltos se agrupan al final en un desplegable **"Resueltos (N)"** (`<details>`; su estado abierto se conserva al re-renderizar), atenuados, con la nota "Resuelto por X · fecha" y la acción **Reabrir**. El encabezado muestra un contador de comentarios **abiertos** (`#comments-count`). Las acciones usan delegación de eventos sobre `#comments-list`; tras cada acción se recarga la lista conservando el scroll (al cargar o al publicar uno nuevo, se desplaza hasta el último comentario abierto, aunque "Resueltos" esté expandido). Si un comentario ya no existe (otra persona lo borró), eliminar se trata como éxito y resolver/reabrir muestra un toast de error; en ambos casos la lista se refresca.
-- **`shared.html` + `shared.js`** — Vista pública: logo (enlaza a `/`), título, tema, **Presentar**, Descargar. Consulta `/api/shared/:shareId`; si es **privado** (403) muestra "Documento privado"; si existe, carga el iframe a `/raw` en una hoja delimitada.
+- **Login** (`index.html` + `login.js`): tarjeta con indicador de 2 pasos —(1) token, (2) perfil (select + *Crear perfil nuevo*)—. Errores en línea con `aria-invalid` y texto que dice cómo corregir. Con sesión y perfil, salta a la biblioteca.
+- **Biblioteca** (`library.html` + `library.js`): header con ruta y *Subir HTML* (primario); título de página, tabs *Mis archivos* / *Públicos* con conteos (`?scope=public` en la URL), callout de almacenamiento y **galería** de tarjetas interactivas: miniatura en vivo (iframe a `/raw` escalado, lazy con `IntersectionObserver`), badges *Público*/*Privado*, tamaño y fecha en mono, acciones compartir/descargar/eliminar (eliminar solo en documentos propios o sin perfil, con confirmación). Estados vacíos con el siguiente paso.
+- **Visor** (`viewer.html` + `viewer.js`): header con ruta (*Mis archivos* o *Públicos*) + **título editable** (Enter confirma, Esc revierte) + **estado de guardado** (punto + *Cambios sin guardar / Guardando… / Guardado / No se guardó*); al centro el segmentado **Vista · Editar · Código**; a la derecha *Descartar* (solo con cambios), *Presentar*, *Compartir*, **Guardar** (`⌘S` en los tres modos) y el botón del panel (muestra el conteo de comentarios abiertos cuando está cerrado). El documento es una hoja delimitada (`max-width: 1300px`); en Editar se ilumina con borde y brillo de acento. **Panel**: pestañas *Comentarios* (lista, resolver/reabrir, eliminar con confirmación, `⌘↵` para enviar) y *Detalles* (propietario, fechas, tamaño; switch *Documento público*, link + copiar; *Descargar HTML* —incluye los cambios sin guardar— y *Eliminar documento*). `#editar` / `#codigo` en la URL abren directo ese modo.
+  - **Estado de cambios real**: `isDirty()` compara el contenido vigente con el último guardado (y el título). Entrar y salir de Editar sin tocar nada no ensucia (se compara contra la serialización base del editor) y deshacer hasta el estado guardado vuelve a "limpio". *Guardar* envía solo lo que cambió (`content` y/o `title`); *Descartar* (con confirmación) recarga la última versión guardada.
+- **Compartida** (`shared.html` + `shared.js`): header mínimo (nombre → `/`, título, tema, *Descargar*, *Presentar*) y la hoja con el iframe a `/raw`; tarjetas de estado para **privado** (403, con *Iniciar sesión*) y **no encontrado**.
 
-### 11.6 Edición enriquecida (barra de formato + editor de bloques)
-
-El modo **Editar texto** sigue siendo `designMode` sobre el DOM real (no una librería RTE que reinterprete el documento), extendido con dos capas de UI que viven **fuera del iframe** — por eso jamás se serializan dentro del HTML guardado:
-
-- **Barra de formato** (`#formatBar`, flotante arriba): deshacer/rehacer, estilo de bloque (P/H1–H3 vía `formatBlock`), negrita/cursiva/subrayado/tachado, color de texto, listas, alineación, insertar/quitar enlace y limpiar formato. Implementada con `document.execCommand` sobre el `contentDocument` (con `styleWithCSS` activado para generar spans con CSS en vez de tags legacy). Los botones hacen `preventDefault` en `mousedown` para no robar el foco; para los controles que sí lo roban (select, color picker) se restaura la última selección guardada (`savedRange`) antes de ejecutar. El hueco sobre el documento sigue la altura real de la barra (CSS var `--fbh` actualizada por ResizeObserver).
-- **Editor de bloques** (modelo "bloque activo"): al poner el cursor en cualquier parte, se calcula el bloque ancestro más cercano (p, h1–h6, li, tr, table, div, section, …; las celdas td/th resuelven a su **fila**) y aparecen un **contorno** (`#blockOutline`) y una **mini-barra** (`#blockBar`) anclados a él, como overlays del padre posicionados con `getBoundingClientRect` (se reposicionan en scroll/resize/input). Acciones: escalar al **contenedor**, mover ↑/↓ (`insertBefore` entre hermanos), duplicar, A−/A+ (font-size del bloque), color de fondo, restablecer estilos, ocultar (`display:none`, recuperable desde Código) y eliminar — el borrado se hace seleccionando el bloque y `execCommand('delete')`, así **Ctrl/Cmd+Z lo deshace**.
-
-Toda mutación sincroniza `content` (`readEditFrame`) y marca el documento como modificado; los `<script>` del reporte siguen inertes y preservados.
+### 11.6 Edición (`editor.js`)
+Sigue siendo `designMode` sobre el DOM real (sin librerías RTE que reinterpreten el documento). La UI vive en el padre; el único nodo que se inyecta en el documento es un `<style data-hv-editor>` (color de selección, marcador de gráficos y revelado de ocultos) que `serialize()` quita antes de leer `outerHTML` y repone después.
+- **Historial propio** basado en instantáneas (`body.innerHTML` + selección + bloque activo): cubre por igual la escritura (agrupada en ráfagas: pausa > 1 s o cambio entre escribir y borrar), el formato y las operaciones de bloque; tope de 200 pasos / ~40 M caracteres. `⌘Z`, `⌘⇧Z`, `⌘Y` y el menú Edición del sistema (`beforeinput` historyUndo/historyRedo) usan este historial; *Deshacer*/*Rehacer* se deshabilitan cuando no hay pasos. Toda mutación pasa por `mutate()`, que solo registra un paso si el HTML cambió.
+- **Barra de formato** (anclada arriba; pasa a una segunda fila si no cabe): deshacer/rehacer · estilo de párrafo (Párrafo, Título 1–4, Cita, Código) · negrita, cursiva, subrayado, tachado (con estado presionado) · color de texto y resaltado (paleta + personalizado + *Color automático*/*Sin resaltado*) · listas y sangría −/+ (solo dentro de listas) · alineación (menú que muestra la actual) · enlace (modal con validación; edita el existente o, sin texto seleccionado, inserta la URL como texto) y quitar enlace (solo si hay uno) · insertar imagen · quitar formato · **Ocultos** (revela los bloques ocultos, con conteo) · atajos de teclado.
+- **Editor de bloques** (modelo "bloque activo"): un clic define el bloque (párrafos, títulos, listas, tablas, secciones, divs…; las celdas resuelven a su **fila**; imágenes, gráficos y videos se seleccionan como bloque). Contorno con borde, lavado y brillo de acento + mini-barra encima (debajo si no cabe). Las acciones vienen en **pares**: seleccionar contenedor ↔ interior (la **ruta** de la barra de estado conserva el nivel interior para volver y también se navega con clic), mover arriba ↔ abajo (`⌘⇧↑/↓`), duplicar (la copia queda seleccionada) e insertar debajo (párrafo, ítem o fila según el bloque), A− ↔ A+ (texto; en imágenes, tamaño), fondo (paleta + *Sin fondo*), restablecer (quita tamaño, fondo y alineación aplicados), ocultar ↔ mostrar, eliminar (toast con *Deshacer*). En filas de tabla aparece **Columna**: insertar a la izquierda/derecha, mover a la izquierda/derecha (deshabilitado en los bordes) y eliminar, simétrico a las operaciones de fila.
+- **Imágenes**: desde archivo (arrastrar o elegir; se reduce a 1600 px de ancho y se embebe como data URL, máx. ~2,5 MB) o desde una URL `http(s)`, con texto alternativo.
+- **Gráficos**: sin scripts, un `<canvas>` se dibuja como su contenido alternativo (0×0). El editor le da una caja rayada del tamaño declarado (`attr(width px)` donde el navegador lo soporta; si no, 100 % × 180 px) y la barra de estado explica que se ven en Vista.
+- **Barra de estado**: ruta del bloque con nombres legibles ("Sección .kpis-wrap › Bloque .card › Párrafo") y una pista contextual.
+- Atajos dentro del documento: `⌘S`, `⌘Z`, `⌘⇧Z`, `⌘B/I/U`, `⌘K` (enlace), `⌘⇧↑/↓`, `Esc` (deseleccionar) y `⌫` sobre una imagen seleccionada.
 
 ### 11.7 Modo presentación (`presentMode`)
-Overlay a pantalla completa (usa la **Fullscreen API**; si falla, queda como overlay fijo) con barra de controles: **zoom −/+**, indicador %, **Ajustar** (reset) y **Salir**. Atajos: `+`/`-` zoom, `0` ajustar, `Esc` salir. El zoom es real (`transform: scale`) con un wrap dimensionado para permitir scroll/pan al acercar. Se invoca desde el visor (con `srcdoc` del contenido actual) y desde la página compartida (con `src=/raw/:shareId`).
+Overlay a pantalla completa (usa la **Fullscreen API**; si falla, queda como overlay fijo) con barra de controles: **zoom −/+**, indicador % (mono), **Ajustar** y **Salir**. Atajos: `+`/`-` zoom, `0` ajustar, `Esc` salir. El zoom es real (`transform: scale`) con un wrap dimensionado para permitir scroll al acercar. Se invoca desde el visor (con `srcdoc` del contenido actual) y desde la página compartida (con `src=/raw/:shareId`).
 
 ### 11.8 Patrón datos → DOM
-Listas con template strings + `escapeHtml` vía `innerHTML`; handlers por **delegación**. Tras una mutación se vuelve a llamar la función de carga.
+Listas con template strings + `escapeHtml` vía `innerHTML`; handlers por **delegación** (`data-act` para el shell, `data-card` en la galería, `data-ed` en el editor, `data-cact` en comentarios). Tras una mutación se vuelve a llamar la función de carga.
+
+### 11.9 Preferencias de UI (`localStorage`)
+`hv-profile` (perfil activo), `hv-theme`, `hv-left` / `hv-right` (explorador / panel, leídas por el script inline del `<head>` para evitar saltos), `hv-panel-tab`, `hv-lib-scope` y `hv-tree-mine` / `hv-tree-public` (carpetas colapsadas).
 
 ---
 
@@ -286,10 +308,10 @@ npm run dev                         # http://localhost:8787
 Despliegue: `wrangler d1 create`, `wrangler r2 bucket create`, `npm run db:migrate:remote`, `wrangler secret put …`, `npm run deploy`. Detalle en [README.md](README.md).
 
 ## 15. Limitaciones conocidas
-- Sin versionado/historial de ediciones (el guardado sobrescribe).
-- Sin búsqueda ni carpetas en la biblioteca.
+- Sin versionado/historial de ediciones entre sesiones (el guardado sobrescribe; el deshacer vive mientras el documento está abierto en Editar).
+- Sin carpetas ni etiquetas; la búsqueda es por título (filtro del explorador y `⌘K`).
 - `/raw` se sirve desde el mismo origin (idealmente, subdominio aparte).
 - Perfil = atribución/vista por navegador, no cuenta (un solo token de acceso global).
-- La edición visual cubre formato de texto y operaciones de bloque; aún no hay inserción de imágenes ni edición asistida por IA.
-- Mover/duplicar/ocultar bloques no entra al stack de deshacer del navegador (eliminar sí, vía `execCommand`).
+- Las operaciones de columna asumen tablas sin celdas combinadas (`colspan`/`rowspan`); los datos de un gráfico solo se editan desde Código; no hay edición asistida por IA.
+- La caja de los gráficos en Editar usa `attr()` tipado (Chrome 133+); en otros navegadores mide 100 % × 180 px.
 - Thumbnails = iframes en vivo escalados (no pre-renderizados); con bibliotecas muy grandes conviene pre-render server-side.

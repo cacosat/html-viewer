@@ -1,52 +1,143 @@
-import { api, toast, shareModal, presentMode, getProfile, escapeHtml, fmtDate } from "/common.js";
+import { icon, hydrateIcons } from "/icons.js";
+import {
+  api, errorMessage, escapeHtml, fmtDate, fmtSize, toast, shareModal, presentMode, confirmDialog,
+  setVisibility, shareUrl, copyText, pref, setPref, MOD, shortcut,
+} from "/common.js";
+import { initShell, toggleRight, isRightOpen } from "/shell.js";
+import { createEditor } from "/editor.js";
+import { initComments } from "/comments.js";
 
-const id = location.pathname.split("/").filter(Boolean).pop();
-const viewStage = document.getElementById("viewStage");
-const editStage = document.getElementById("editStage");
-const codePane = document.getElementById("codePane");
-const viewFrame = document.getElementById("viewFrame");
-const editFrame = document.getElementById("editFrame");
-const codeEl = document.getElementById("code");
-const titleEl = document.getElementById("title");
-const saveBtn = document.getElementById("save");
-const tabButtons = [...document.querySelectorAll(".tabs button")];
-const docArea = document.querySelector(".doc-area");
+hydrateIcons();
+const id = decodeURIComponent(location.pathname.split("/").filter(Boolean).pop() || "");
+const shell = initShell({ page: "doc", docId: id });
+
+const $ = (s) => document.getElementById(s);
+const titleEl = $("title");
+const saveBtn = $("save");
+const discardBtn = $("discard");
+const saveState = $("save-state");
+const docArea = $("docArea");
+const viewStage = $("viewStage"), editStage = $("editStage"), codePane = $("codePane");
+const viewFrame = $("viewFrame"), editFrame = $("editFrame"), codeEl = $("code");
+const modeButtons = [...document.querySelectorAll("#modes [data-mode]")];
+const panelToggle = $("toggle-panel");
+const panelCount = $("panel-count");
 
 let doc = null;
-let content = "";   // fuente de verdad del HTML, siempre al día
-let dirty = false;
-let cm = null;      // instancia CodeMirror (carga diferida)
-let cmSettingValue = false; // ignora el evento change del setValue programático
+let content = "";           // HTML vigente (se actualiza al salir de cada modo)
+let savedContent = "";      // última versión guardada en el servidor
+let savedTitle = "";
+let mode = "view";
+let editSource = null;      // HTML con el que se cargó Editar…
+let editBaseline = null;    // …y su serialización sin cambios (entrar/salir no ensucia)
+let cm = null, cmSetting = false;
+let saving = false;
+let openComments = 0;
 
-function markDirty() { dirty = true; saveBtn.disabled = false; }
+saveBtn.title = `Guardar (${shortcut(MOD, "S")})`;
 
-// Serializa el HTML del iframe de edición. Guarda contra vaciar `content`
-// (p. ej. si el iframe aún no terminó de cargar).
-function readEditFrame() {
-  try {
-    const d = editFrame.contentDocument;
-    if (!d || !d.body || !d.body.innerHTML.trim()) return content;
-    const doctype = d.doctype ? `<!DOCTYPE ${d.doctype.name}>\n` : "";
-    return doctype + d.documentElement.outerHTML;
-  } catch {
-    return content;
+// ---------------- Editor ----------------
+const editor = createEditor({
+  frame: editFrame,
+  formatBar: $("formatBar"),
+  overlays: $("editOverlays"),
+  blockBar: $("blockBar"),
+  blockOutline: $("blockOutline"),
+  statusBar: $("editStatus"),
+  onChange: () => scheduleDirtyCheck(),
+  onSave: () => save(),
+});
+
+// ---------------- Contenido y estado de guardado ----------------
+function currentContent() {
+  if (mode === "edit" && editor.ready && editBaseline != null) {
+    const s = editor.serialize();
+    if (s == null) return content;
+    return s === editBaseline ? editSource : s;
   }
+  if (mode === "code") return cm ? cm.getValue() : codeEl.value;
+  return content;
+}
+function captureCurrent() { content = currentContent(); }
+const titleValue = () => titleEl.value.trim();
+const isDirty = () => !!doc && (currentContent() !== savedContent || (!!titleValue() && titleValue() !== savedTitle));
+
+const STATE_TEXT = { dirty: "Cambios sin guardar", saving: "Guardando…", saved: "Guardado", error: "No se guardó" };
+function setSaveState(state) {
+  if (!state) { saveState.hidden = true; saveState.dataset.state = ""; return; }
+  saveState.hidden = false;
+  saveState.dataset.state = state;
+  saveState.title = STATE_TEXT[state];
+  saveState.firstElementChild.textContent = STATE_TEXT[state];
+}
+function updateDirty() {
+  const dirty = isDirty();
+  saveBtn.disabled = !dirty || saving;
+  discardBtn.hidden = !dirty;
+  if (saving) return;
+  const cur = saveState.dataset.state;
+  if (dirty) setSaveState(cur === "error" ? "error" : "dirty");
+  else setSaveState(cur === "saved" ? "saved" : null);
+}
+let dirtyTimer = null;
+function scheduleDirtyCheck() {
+  if (!saving && saveState.dataset.state !== "error") { setSaveState("dirty"); saveBtn.disabled = false; }
+  clearTimeout(dirtyTimer);
+  dirtyTimer = setTimeout(updateDirty, 250);
 }
 
-// La superficie visible es la fuente de verdad (no depende de estado externo).
-function visibleSurface() {
-  if (!codePane.hidden) return "code";
-  if (!editStage.hidden) return "text";
-  return "view";
-}
+const sqliteNow = () => new Date().toISOString().slice(0, 19).replace("T", " ");
 
-function captureCurrent() {
-  const s = visibleSurface();
-  if (s === "text") content = readEditFrame();
-  else if (s === "code") content = cm ? cm.getValue() : codeEl.value;
+async function save() {
+  if (saving || !doc) return;
+  captureCurrent();
+  const title = titleValue();
+  const body = {};
+  if (content !== savedContent) body.content = content;
+  if (title && title !== savedTitle) body.title = title;
+  if (!Object.keys(body).length) { updateDirty(); return; }
+  saving = true;
+  saveBtn.disabled = true;
+  setSaveState("saving");
+  try {
+    const res = await api(`/api/documents/${encodeURIComponent(id)}`, { method: "PUT", body });
+    if (!res.ok) throw new Error(await errorMessage(res));
+    savedContent = content;
+    if (body.title) savedTitle = title;
+    doc.title = savedTitle;
+    doc.updated_at = sqliteNow();
+    if (body.content) doc.size = new Blob([content]).size;
+    if (mode === "edit" && editor.ready) { editSource = content; editBaseline = editor.serialize(); }
+    document.title = `${savedTitle || "Documento"} · Visor HTML`;
+    renderDetails();
+    if (body.title) document.dispatchEvent(new CustomEvent("hv:docs-changed"));
+    saving = false;
+    setSaveState("saved");
+    setTimeout(() => { if (saveState.dataset.state === "saved" && !isDirty()) setSaveState(null); }, 2500);
+  } catch (e) {
+    saving = false;
+    setSaveState("error");
+    toast(e.message || "No se pudo guardar. Revisa tu conexión e inténtalo de nuevo.", { tone: "danger", duration: 8000 });
+  }
+  updateDirty();
 }
+saveBtn.addEventListener("click", save);
 
-// ---- CodeMirror (self-host, carga diferida) ----
+discardBtn.addEventListener("click", async () => {
+  const ok = await confirmDialog({
+    title: "¿Descartar los cambios sin guardar?",
+    body: "El documento vuelve a la última versión guardada.",
+    confirm: "Descartar cambios", cancel: "Seguir editando", danger: true,
+  });
+  if (!ok) return;
+  content = savedContent;
+  titleEl.value = savedTitle;
+  setSaveState(null);
+  await setMode(mode, { force: true, keep: true });
+  toast("Cambios descartados");
+});
+
+// ---------------- Modos: Vista / Editar / Código ----------------
 function loadScript(src) {
   return new Promise((res, rej) => {
     const s = document.createElement("script");
@@ -54,7 +145,6 @@ function loadScript(src) {
     document.head.appendChild(s);
   });
 }
-
 let cmAssets = null;
 function loadCMAssets() {
   if (cmAssets) return cmAssets;
@@ -71,436 +161,229 @@ function loadCMAssets() {
   })();
   return cmAssets;
 }
-
 async function ensureCM() {
   if (cm) return;
   try {
     await loadCMAssets();
     if (!window.CodeMirror) return;
-    cm = window.CodeMirror.fromTextArea(codeEl, {
-      mode: "htmlmixed",
-      lineNumbers: true,
-      lineWrapping: true,
-      tabSize: 2,
-      theme: "default",
-    });
-    cm.on("change", () => { if (cmSettingValue) return; content = cm.getValue(); markDirty(); });
+    cm = window.CodeMirror.fromTextArea(codeEl, { mode: "htmlmixed", lineNumbers: true, lineWrapping: true, tabSize: 2, theme: "default" });
+    cm.on("change", () => { if (!cmSetting) scheduleDirtyCheck(); });
   } catch {
-    cm = null; // fallback: textarea plano
+    cm = null; // queda el textarea plano
   }
 }
+codeEl.addEventListener("input", () => scheduleDirtyCheck());
 
-async function setTab(tab) {
-  captureCurrent(); // captura ediciones de la superficie actual antes de cambiar
-  for (const b of tabButtons) b.classList.toggle("active", b.dataset.tab === tab);
-  viewStage.hidden = tab !== "view";
-  editStage.hidden = tab !== "text";
-  codePane.hidden = tab !== "code";
-
-  const editing = tab === "text";
-  docArea.classList.toggle("editing", editing);
-  formatBar.hidden = !editing;
-  editOverlays.hidden = !editing;
-  if (!editing) hideBlockUI();
-
-  if (tab === "view") {
+async function setMode(m, { force = false, keep = false } = {}) {
+  if (!doc || (m === mode && !force)) return;
+  if (!keep) captureCurrent();
+  mode = m;
+  for (const b of modeButtons) {
+    b.setAttribute("aria-selected", String(b.dataset.mode === m));
+    b.tabIndex = b.dataset.mode === m ? 0 : -1;
+  }
+  docArea.classList.toggle("is-editing", m === "edit");
+  viewStage.hidden = m !== "view";
+  editStage.hidden = m !== "edit";
+  codePane.hidden = m !== "code";
+  editor.setActive(m === "edit");
+  if (m === "view") {
     viewFrame.srcdoc = content;
-  } else if (tab === "text") {
-    editFrame.onload = () => {
-      try {
-        const d = editFrame.contentDocument;
-        d.designMode = "on";
-        // Formato como CSS inline (spans con style) y Enter crea <p>.
-        try { d.execCommand("styleWithCSS", false, true); d.execCommand("defaultParagraphSeparator", false, "p"); } catch { /* noop */ }
-        d.addEventListener("input", () => { content = readEditFrame(); markDirty(); requestAnimationFrame(positionBlockUI); });
-        attachEdit(d);
-      } catch (_) { /* algún navegador podría bloquearlo */ }
-    };
-    editFrame.srcdoc = content;
-  } else if (tab === "code") {
+  } else if (m === "edit") {
+    editSource = content;
+    editBaseline = null;
+    await editor.load(content);
+    if (mode !== "edit") return;
+    editBaseline = editor.serialize();
+    editor.focus();
+  } else {
     await ensureCM();
-    if (cm) { cmSettingValue = true; cm.setValue(content); cmSettingValue = false; setTimeout(() => cm.refresh(), 0); }
-    else { codeEl.value = content; }
+    if (mode !== "code") return;
+    if (cm) {
+      cmSetting = true; cm.setValue(content); cmSetting = false;
+      setTimeout(() => { cm.refresh(); cm.focus(); }, 0);
+    } else codeEl.value = content;
   }
+  updateDirty();
 }
-
-document.querySelector(".tabs").addEventListener("click", (e) => {
-  const b = e.target.closest("button[data-tab]");
-  if (b) setTab(b.dataset.tab);
+for (const b of modeButtons) b.addEventListener("click", () => setMode(b.dataset.mode));
+$("modes").addEventListener("keydown", (e) => {
+  if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+  const i = modeButtons.findIndex((b) => b.dataset.mode === mode);
+  const next = modeButtons[(i + (e.key === "ArrowRight" ? 1 : modeButtons.length - 1)) % modeButtons.length];
+  setMode(next.dataset.mode);
+  next.focus();
 });
 
-titleEl.addEventListener("input", markDirty);
+// ---------------- Título ----------------
+titleEl.addEventListener("input", () => updateDirty());
+titleEl.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); titleEl.blur(); }
+  else if (e.key === "Escape") { titleEl.value = savedTitle; titleEl.blur(); updateDirty(); }
+});
+titleEl.addEventListener("blur", () => { if (!titleValue()) titleEl.value = savedTitle; updateDirty(); });
 
-saveBtn.addEventListener("click", async () => {
+// ---------------- Acciones del header ----------------
+$("share").addEventListener("click", () => { if (doc) shareModal(doc); });
+$("present").addEventListener("click", () => { if (!doc) return; captureCurrent(); presentMode({ srcdoc: content }); });
+
+document.addEventListener("keydown", (e) => {
+  if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === "s") { e.preventDefault(); save(); }
+});
+window.addEventListener("beforeunload", (e) => { if (isDirty()) { e.preventDefault(); e.returnValue = ""; } });
+
+// ---------------- Panel derecho: comentarios / detalles ----------------
+const panelTabs = [...document.querySelectorAll(".panel-tabs [data-ptab]")];
+function setPanelTab(t) {
+  for (const b of panelTabs) {
+    const on = b.dataset.ptab === t;
+    b.setAttribute("aria-selected", String(on));
+    b.tabIndex = on ? 0 : -1;
+    $(b.getAttribute("aria-controls")).hidden = !on;
+  }
+  setPref("hv-panel-tab", t);
+}
+for (const b of panelTabs) b.addEventListener("click", () => setPanelTab(b.dataset.ptab));
+document.querySelector(".panel-tabs").addEventListener("keydown", (e) => {
+  if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+  const cur = panelTabs.findIndex((b) => b.getAttribute("aria-selected") === "true");
+  const next = panelTabs[(cur + 1) % panelTabs.length];
+  setPanelTab(next.dataset.ptab);
+  next.focus();
+});
+function syncPanelButton() {
+  const open = isRightOpen();
+  panelToggle.setAttribute("aria-pressed", String(open));
+  panelToggle.title = open ? "Ocultar comentarios y detalles" : "Mostrar comentarios y detalles";
+  panelCount.textContent = String(openComments);
+  panelCount.hidden = open || !openComments;
+}
+panelToggle.addEventListener("click", () => toggleRight());
+$("panel-close").addEventListener("click", () => toggleRight(false));
+document.addEventListener("hv:panel", syncPanelButton);
+
+const comments = shell && initComments({
+  docId: id,
+  profile: shell.profile,
+  listEl: $("comments-list"),
+  formEl: $("comments-form"),
+  countEls: [$("comments-count")],
+  onCount: (n) => { openComments = n; syncPanelButton(); },
+});
+
+function downloadCurrent() {
   captureCurrent();
-  saveBtn.disabled = true;
-  saveBtn.textContent = "Guardando…";
-  try {
-    const res = await api(`/api/documents/${id}`, { method: "PUT", body: { content, title: titleEl.value } });
-    if (!res.ok) {
-      const txt = await res.text();
-      let msg = txt; try { msg = JSON.parse(txt).message || txt; } catch {}
-      throw new Error(msg);
-    }
-    dirty = false;
-    toast("Guardado");
-  } catch (err) {
-    alert("Error al guardar: " + err.message);
-  } finally {
-    saveBtn.textContent = "Guardar";
-    saveBtn.disabled = !dirty;
-  }
-});
-
-document.getElementById("copy").addEventListener("click", () => {
-  if (!doc) return;
-  shareModal({ id: doc.id, share_id: doc.share_id, public: doc.public, title: doc.title });
-});
-
-document.getElementById("present").addEventListener("click", () => {
-  captureCurrent();
-  presentMode({ srcdoc: content });
-});
-
-// ============================================================
-// Edición enriquecida: barra de formato + editor de bloques.
-// Toda la UI vive FUERA del iframe (overlays en el padre), así
-// jamás se serializa dentro del HTML guardado.
-// ============================================================
-const formatBar = document.getElementById("formatBar");
-const editOverlays = document.getElementById("editOverlays");
-const blockBar = document.getElementById("blockBar");
-const blockOutline = document.getElementById("blockOutline");
-const blockTag = document.getElementById("blockTag");
-const blockFormatSel = document.getElementById("blockFormat");
-const foreColorInput = document.getElementById("foreColor");
-const foreSwatch = document.getElementById("foreSwatch");
-const blockBgInput = document.getElementById("blockBg");
-const bgSwatch = document.getElementById("bgSwatch");
-
-let edDoc = null;       // document del iframe en edición
-let edWin = null;       // window del iframe en edición
-let savedRange = null;  // última selección conocida (para restaurar tras usar la toolbar)
-let activeBlock = null; // bloque activo (modelo A: donde está el cursor)
-
-// td/th excluidos a propósito: el caret en una celda selecciona la FILA (tr).
-const BLOCK_SEL = "p,h1,h2,h3,h4,h5,h6,ul,ol,li,table,tr,blockquote,pre,figure,figcaption,section,article,header,footer,aside,nav,div,form,fieldset";
-
-function attachEdit(d) {
-  edDoc = d;
-  edWin = editFrame.contentWindow;
-  savedRange = null;
-  activeBlock = null;
-  hideBlockUI();
-  d.addEventListener("selectionchange", onEditSelection);
-  d.addEventListener("mouseup", onEditSelection);
-  d.addEventListener("keyup", onEditSelection);
-  edWin.addEventListener("scroll", () => positionBlockUI(), true);
+  const name = (titleValue() || savedTitle || "documento").replace(/[^\p{L}\p{N}._ -]+/gu, "_").trim().slice(0, 80) || "documento";
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([content], { type: "text/html;charset=utf-8" }));
+  a.download = name + ".html";
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
 }
 
-function ancestorBlock(node) {
-  if (!edDoc) return null;
-  let el = node && (node.nodeType === 1 ? node : node.parentElement);
-  if (!el || !el.closest) return null;
-  const b = el.closest(BLOCK_SEL);
-  return b && b !== edDoc.body && b !== edDoc.documentElement && edDoc.body.contains(b) ? b : null;
+function renderDetails() {
+  const el = $("details");
+  if (!doc || !el) return;
+  const owner = !doc.profile_id || (shell && doc.profile_id === shell.profile.id);
+  const pub = doc.public === 1 || doc.public === true;
+  el.innerHTML = `
+    <section class="details-section">
+      <span class="overline">Documento</span>
+      <dl class="kv">
+        <dt>Propietario</dt><dd>${escapeHtml(doc.profile_name || "Sin perfil")}</dd>
+        <dt>Creado</dt><dd>${escapeHtml(fmtDate(doc.created_at))}</dd>
+        <dt>Actualizado</dt><dd>${escapeHtml(fmtDate(doc.updated_at))}</dd>
+        <dt>Tamaño</dt><dd class="mono">${escapeHtml(fmtSize(doc.size))}</dd>
+      </dl>
+    </section>
+    <section class="details-section">
+      <span class="overline">Compartir</span>
+      <div class="setting-row">
+        <div>
+          <label class="ui-label" for="dt-public">Documento público</label>
+          <p class="ui-help" id="dt-public-desc">${pub ? "Cualquiera con el link puede verlo, sin iniciar sesión." : "Solo quienes inician sesión pueden abrirlo."}</p>
+        </div>
+        <button type="button" class="ui-switch" role="switch" id="dt-public" aria-checked="${pub}" aria-describedby="dt-public-desc"></button>
+      </div>
+      <div class="ui-field">
+        <label class="ui-label" for="dt-link">Link</label>
+        <div class="copy-row">
+          <input class="ui-input" id="dt-link" readonly value="${escapeHtml(shareUrl(doc))}">
+          <button type="button" class="ui-btn ui-btn-icon" id="dt-copy" aria-label="Copiar link" title="Copiar link">${icon("copy")}</button>
+        </div>
+      </div>
+    </section>
+    <section class="details-section">
+      <span class="overline">Acciones</span>
+      <div class="details-actions">
+        <button type="button" class="ui-btn" id="dt-download" title="Incluye los cambios sin guardar">${icon("download")}Descargar HTML</button>
+        ${owner ? `<button type="button" class="ui-btn ui-btn-danger" id="dt-delete">${icon("trash")}Eliminar documento</button>` : ""}
+      </div>
+    </section>`;
+  const sw = $("dt-public");
+  sw.addEventListener("click", async () => {
+    sw.disabled = true;
+    try {
+      await setVisibility(doc, !(doc.public === 1 || doc.public === true));
+      toast(doc.public ? "Ahora es público" : "Ahora es privado");
+    } catch { toast("No se pudo cambiar la visibilidad", { tone: "danger" }); sw.disabled = false; }
+  });
+  $("dt-copy").addEventListener("click", () => copyText(shareUrl(doc), $("dt-link")));
+  $("dt-download").addEventListener("click", downloadCurrent);
+  const del = $("dt-delete");
+  if (del) del.addEventListener("click", async () => {
+    const ok = await confirmDialog({
+      title: "¿Eliminar este documento?",
+      body: `«${doc.title}» y sus comentarios se eliminarán definitivamente.`,
+      confirm: "Eliminar documento", cancel: "Conservar documento", danger: true,
+    });
+    if (!ok) return;
+    const res = await api(`/api/documents/${encodeURIComponent(id)}`, { method: "DELETE" });
+    if (!res.ok && res.status !== 404) { toast(await errorMessage(res) || "No se pudo eliminar", { tone: "danger" }); return; }
+    savedContent = currentContent(); savedTitle = titleValue() || savedTitle; // evita el aviso de cambios al salir
+    location.href = "/library";
+  });
 }
+document.addEventListener("hv:doc-changed", (e) => { if (doc && e.detail && e.detail.id === doc.id) renderDetails(); });
 
-function onEditSelection() {
-  if (!edDoc) return;
-  try {
-    const sel = edWin.getSelection();
-    if (sel && sel.rangeCount) {
-      savedRange = sel.getRangeAt(0).cloneRange();
-      activeBlock = ancestorBlock(sel.getRangeAt(0).startContainer);
-    }
-  } catch { /* noop */ }
-  updateToolbarState();
-  positionBlockUI();
+// ---------------- Carga ----------------
+function showLoadError(status) {
+  docArea.innerHTML = `
+    <div class="doc-error">
+      <div class="ui-card state-card">
+        <div class="empty-icon">${icon("circle-alert", 20)}</div>
+        <h2 class="h3">${status === 404 ? "No encontramos este documento" : "No se pudo abrir el documento"}</h2>
+        <p class="small muted">${status === 404 ? "Puede que lo hayan eliminado. Vuelve a la biblioteca para ver los disponibles." : "Revisa tu conexión y vuelve a intentarlo."}</p>
+        <a class="ui-btn" href="/library">Ir a la biblioteca</a>
+      </div>
+    </div>`;
+  for (const b of [saveBtn, $("share"), $("present"), ...modeButtons]) b.disabled = true;
+  titleEl.disabled = true;
 }
-
-function syncEdit() { content = readEditFrame(); markDirty(); }
-
-// Ejecuta un comando de edición restaurando la selección (los botones de la
-// toolbar no roban el foco gracias al preventDefault en mousedown, pero el
-// select y los pickers de color sí — savedRange cubre esos casos).
-function exec(cmd, val = null) {
-  if (!edDoc) return;
-  try {
-    edWin.focus();
-    const sel = edWin.getSelection();
-    if (savedRange) { sel.removeAllRanges(); sel.addRange(savedRange); }
-    edDoc.execCommand(cmd, false, val);
-    syncEdit();
-    updateToolbarState();
-    requestAnimationFrame(positionBlockUI);
-  } catch { /* noop */ }
-}
-
-const STATE_CMDS = ["bold", "italic", "underline", "strikeThrough", "insertUnorderedList", "insertOrderedList", "justifyLeft", "justifyCenter", "justifyRight"];
-function updateToolbarState() {
-  if (!edDoc || formatBar.hidden) return;
-  for (const btn of formatBar.querySelectorAll("[data-cmd]")) {
-    const c = btn.dataset.cmd;
-    if (!STATE_CMDS.includes(c)) continue;
-    let on = false;
-    try { on = edDoc.queryCommandState(c); } catch { /* noop */ }
-    btn.classList.toggle("active", on);
-  }
-  let v = "";
-  try { v = String(edDoc.queryCommandValue("formatBlock")).toLowerCase(); } catch { /* noop */ }
-  blockFormatSel.value = ["p", "h1", "h2", "h3"].includes(v) ? v : "";
-}
-
-// --- Wiring de la barra de formato ---
-formatBar.addEventListener("mousedown", (e) => { if (!e.target.closest("select,input")) e.preventDefault(); });
-formatBar.addEventListener("click", (e) => {
-  const b = e.target.closest("[data-cmd]");
-  if (b) exec(b.dataset.cmd);
-});
-blockFormatSel.addEventListener("change", () => {
-  if (blockFormatSel.value) exec("formatBlock", "<" + blockFormatSel.value + ">");
-});
-document.getElementById("linkBtn").addEventListener("click", () => {
-  const url = prompt("URL del enlace:", "https://");
-  if (url && url !== "https://") exec("createLink", url);
-});
-foreColorInput.addEventListener("change", () => {
-  foreSwatch.style.borderBottomColor = foreColorInput.value;
-  exec("foreColor", foreColorInput.value);
-});
-
-// --- Editor de bloques (modelo A: mini-barra anclada al bloque del cursor) ---
-function hideBlockUI() { blockBar.hidden = true; blockOutline.hidden = true; }
-
-function positionBlockUI() {
-  if (editStage.hidden || !edDoc || !activeBlock || !activeBlock.isConnected) { hideBlockUI(); return; }
-  let r;
-  try { r = activeBlock.getBoundingClientRect(); } catch { hideBlockUI(); return; }
-  if (!r.width && !r.height) { hideBlockUI(); return; } // display:none u oculto
-  const ifr = editFrame.getBoundingClientRect();
-  const da = docArea.getBoundingClientRect();
-  const ox = ifr.left - da.left, oy = ifr.top - da.top;
-
-  blockOutline.style.top = oy + r.top + "px";
-  blockOutline.style.left = ox + r.left + "px";
-  blockOutline.style.width = r.width + "px";
-  blockOutline.style.height = r.height + "px";
-  blockOutline.hidden = false;
-
-  blockTag.textContent = activeBlock.tagName.toLowerCase();
-  blockBar.hidden = false;
-  const bw = blockBar.offsetWidth, bh = blockBar.offsetHeight;
-  let top = oy + r.top - bh - 6;
-  if (top < oy + 4) top = oy + r.bottom + 6; // no cabe arriba → debajo del bloque
-  top = Math.min(Math.max(top, oy + 4), oy + ifr.height - bh - 4);
-  let left = ox + r.left;
-  left = Math.min(Math.max(left, ox + 4), Math.max(ox + 4, ox + ifr.width - bw - 4));
-  blockBar.style.top = top + "px";
-  blockBar.style.left = left + "px";
-}
-
-blockBar.addEventListener("mousedown", (e) => { if (!e.target.closest("input")) e.preventDefault(); });
-blockBar.addEventListener("click", (e) => {
-  const b = e.target.closest("[data-act]");
-  if (!b || !edDoc || !activeBlock || !activeBlock.isConnected) return;
-  const el = activeBlock;
-  const p = el.parentElement;
-
-  if (b.dataset.act === "parent") {
-    if (p && p !== edDoc.body && p !== edDoc.documentElement) { activeBlock = p; positionBlockUI(); }
-    return; // no muta el documento
-  }
-
-  switch (b.dataset.act) {
-    case "up":
-      if (el.previousElementSibling) { p.insertBefore(el, el.previousElementSibling); el.scrollIntoView({ block: "nearest" }); }
-      break;
-    case "down":
-      if (el.nextElementSibling) { p.insertBefore(el.nextElementSibling, el); el.scrollIntoView({ block: "nearest" }); }
-      break;
-    case "dup":
-      el.after(el.cloneNode(true));
-      break;
-    case "smaller":
-    case "bigger": {
-      const cur = parseFloat(edWin.getComputedStyle(el).fontSize) || 16;
-      const next = b.dataset.act === "bigger" ? cur * 1.15 : cur / 1.15;
-      el.style.fontSize = Math.min(96, Math.max(8, Math.round(next))) + "px";
-      break;
-    }
-    case "resetStyle":
-      el.style.backgroundColor = "";
-      el.style.fontSize = "";
-      el.style.display = "";
-      if (!el.getAttribute("style")) el.removeAttribute("style");
-      break;
-    case "hide":
-      el.style.display = "none";
-      hideBlockUI();
-      toast("Bloque oculto — recuperable desde la pestaña Código");
-      break;
-    case "del": {
-      // Vía selección + execCommand para que Ctrl/Cmd+Z pueda deshacerlo.
-      try {
-        const r = edDoc.createRange();
-        r.selectNode(el);
-        const sel = edWin.getSelection();
-        sel.removeAllRanges();
-        sel.addRange(r);
-        edDoc.execCommand("delete");
-        edWin.focus();
-      } catch { el.remove(); }
-      activeBlock = null;
-      hideBlockUI();
-      toast("Bloque eliminado — Ctrl/Cmd+Z para deshacer");
-      break;
-    }
-  }
-  syncEdit();
-  requestAnimationFrame(positionBlockUI);
-});
-
-blockBgInput.addEventListener("input", () => {
-  if (activeBlock && activeBlock.isConnected) {
-    activeBlock.style.backgroundColor = blockBgInput.value;
-    bgSwatch.style.background = blockBgInput.value;
-  }
-});
-blockBgInput.addEventListener("change", () => { syncEdit(); });
-
-// Reposicionar overlays ante cambios de layout (toggle comentarios, resize, etc.).
-new ResizeObserver(() => positionBlockUI()).observe(editFrame);
-window.addEventListener("resize", positionBlockUI);
-// El hueco sobre el documento sigue la altura real de la barra (puede envolver a 2 filas).
-new ResizeObserver(() => {
-  docArea.style.setProperty("--fbh", formatBar.offsetHeight + "px");
-}).observe(formatBar);
-
-// ---- Comentarios ----
-const profile = getProfile();
-const commentsList = document.getElementById("comments-list");
-const commentsForm = document.getElementById("comments-form");
-const commentsCount = document.getElementById("comments-count");
-let resolvedOpen = false; // estado del desplegable "Resueltos" entre re-renders
-
-const CICON = {
-  check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>',
-  reopen: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>',
-  trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>',
-};
-
-function commentHtml(c) {
-  const resolved = !!c.resolved;
-  const toggle = resolved
-    ? `<button class="cbtn" data-cact="reopen" title="Reabrir comentario">${CICON.reopen}Reabrir</button>`
-    : `<button class="cbtn" data-cact="resolve" title="Marcar como resuelto">${CICON.check}Resolver</button>`;
-  const note = resolved
-    ? `<div class="comment-resolved-note">${CICON.check}Resuelto${c.resolved_by ? " por " + escapeHtml(c.resolved_by) : ""}${c.resolved_at ? " · " + fmtDate(c.resolved_at) : ""}</div>`
-    : "";
-  return `<div class="comment${resolved ? " resolved" : ""}" data-cid="${c.id}">
-    <div class="comment-head"><span class="comment-author">${escapeHtml(c.author || "—")}</span><span class="comment-date">${fmtDate(c.created_at)}</span></div>
-    <div class="comment-body">${escapeHtml(c.body)}</div>${note}
-    <div class="comment-actions">${toggle}<button class="cbtn icon danger" data-cact="delete" title="Eliminar comentario" aria-label="Eliminar comentario">${CICON.trash}</button></div>
-  </div>`;
-}
-
-async function loadComments({ scrollToEnd = false } = {}) {
-  try {
-    const cs = await (await api(`/api/documents/${id}/comments`)).json();
-    const open = cs.filter((c) => !c.resolved);
-    const done = cs.filter((c) => c.resolved);
-    const prevScroll = commentsList.scrollTop;
-    let html = open.length
-      ? open.map(commentHtml).join("")
-      : `<p class="muted comments-empty">${done.length ? "No hay comentarios abiertos." : "Sin comentarios aún."}</p>`;
-    if (done.length) {
-      html += `<details class="comments-resolved"${resolvedOpen ? " open" : ""}><summary>Resueltos (${done.length})</summary>${done.map(commentHtml).join("")}</details>`;
-    }
-    commentsList.innerHTML = html;
-    commentsCount.textContent = String(open.length);
-    commentsCount.hidden = !open.length;
-    const det = commentsList.querySelector(".comments-resolved");
-    if (det) det.addEventListener("toggle", () => { resolvedOpen = det.open; });
-    if (!scrollToEnd) {
-      commentsList.scrollTop = prevScroll;
-      return;
-    }
-    commentsList.scrollTop = commentsList.scrollHeight;
-    // Con "Resueltos" abierto, el último comentario abierto queda sobre esa lista: traerlo a la vista.
-    const lastOpen = [...commentsList.querySelectorAll(":scope > .comment")].pop();
-    if (lastOpen && resolvedOpen) {
-      commentsList.scrollTop += lastOpen.getBoundingClientRect().bottom - commentsList.getBoundingClientRect().bottom + 16;
-    }
-  } catch { /* noop */ }
-}
-
-// Resolver / reabrir / eliminar (delegación sobre la lista).
-commentsList.addEventListener("click", async (e) => {
-  const btn = e.target.closest("[data-cact]");
-  const cid = btn && btn.closest(".comment") && btn.closest(".comment").dataset.cid;
-  if (!cid) return;
-  const act = btn.dataset.cact;
-  if (act === "delete" && !confirm("¿Eliminar este comentario? No se puede deshacer.")) return;
-  btn.disabled = true;
-  try {
-    const res = act === "delete"
-      ? await api(`/api/comments/${cid}`, { method: "DELETE" })
-      : await api(`/api/comments/${cid}`, { method: "PATCH", body: { resolved: act === "resolve", by: (profile && profile.name) || null } });
-    // Un 404 al eliminar significa que alguien más ya lo borró: el resultado es el mismo.
-    if (!res.ok && !(act === "delete" && res.status === 404)) throw new Error(String(res.status));
-    if (act === "delete") toast("Comentario eliminado");
-  } catch {
-    toast("No se pudo actualizar el comentario");
-  }
-  await loadComments();
-});
-
-commentsForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const ta = document.getElementById("comment-body");
-  const body = ta.value.trim();
-  if (!body) return;
-  const btn = commentsForm.querySelector("button");
-  btn.disabled = true;
-  try {
-    const res = await api(`/api/documents/${id}/comments`, { method: "POST", body: { author: (profile && profile.name) || "Anónimo", body } });
-    if (!res.ok) throw new Error();
-    ta.value = "";
-    await loadComments({ scrollToEnd: true });
-  } catch {
-    toast("No se pudo comentar");
-  } finally {
-    btn.disabled = false;
-  }
-});
-
-// Toggle de la barra de comentarios (preferencia persistida)
-const toggleCommentsBtn = document.getElementById("toggle-comments");
-function applyCommentsState() {
-  const open = localStorage.getItem("hv-comments") !== "closed";
-  document.querySelector(".viewer-main").classList.toggle("comments-hidden", !open);
-  toggleCommentsBtn.classList.toggle("active", open);
-  toggleCommentsBtn.setAttribute("aria-pressed", String(open));
-}
-toggleCommentsBtn.addEventListener("click", () => {
-  const open = localStorage.getItem("hv-comments") !== "closed";
-  localStorage.setItem("hv-comments", open ? "closed" : "open");
-  applyCommentsState();
-});
-applyCommentsState();
-
-window.addEventListener("beforeunload", (e) => { if (dirty) { e.preventDefault(); e.returnValue = ""; } });
 
 async function load() {
-  const res = await api(`/api/documents/${id}`);
-  if (!res.ok) { document.body.innerHTML = "<p style='padding:2rem'>No se pudo cargar el documento.</p>"; return; }
+  if (!shell) return;
+  setPanelTab(pref("hv-panel-tab", "comments"));
+  syncPanelButton();
+  let res;
+  try { res = await api(`/api/documents/${encodeURIComponent(id)}`); } catch { showLoadError(0); return; }
+  if (!res.ok) { showLoadError(res.status); return; }
   doc = await res.json();
-  content = doc.content || "";
-  titleEl.value = doc.title || "";
-  document.title = (doc.title || "Documento") + " · Reuse";
-  setTab("view");
-  loadComments({ scrollToEnd: true });
+  content = savedContent = doc.content || "";
+  delete doc.content;
+  savedTitle = doc.title || "";
+  titleEl.value = savedTitle;
+  document.title = `${savedTitle || "Documento"} · Visor HTML`;
+  const crumb = $("crumb-scope");
+  if (doc.profile_id === shell.profile.id) { crumb.textContent = "Mis archivos"; crumb.href = "/library"; }
+  else if (doc.public) { crumb.textContent = "Públicos"; crumb.href = "/library?scope=public"; }
+  else { crumb.textContent = "Biblioteca"; crumb.href = "/library"; }
+  renderDetails();
+  viewFrame.srcdoc = content;
+  comments.load({ scrollToEnd: true });
+  if (location.hash === "#editar") setMode("edit");
+  else if (location.hash === "#codigo") setMode("code");
 }
 
 load();
